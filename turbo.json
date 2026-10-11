@@ -1,5 +1,18 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalEnv": [
+    "DATABASE_URL",
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_SECRET",
+    "AUTH_SECRET",
+    "NEXTAUTH_SECRET",
+    "WS_TOKEN_SECRET",
+    "REDIS_URL",
+    "NEXT_PUBLIC_APP_URL",
+    "CLIENT_URL",
+    "WS_PORT",
+    "NEXT_PUBLIC_WS_URL"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

@@ -3,6 +3,7 @@ import Google from "next-auth/providers/google";
 import { prisma } from "@ludo/database";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || "tI3qpPrP9ObUznnT7+NspZWU0iMstkoOal/3cDtPc6c=",
   providers: [
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID,
