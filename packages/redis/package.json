@@ -1,0 +1,20 @@
+{
+  "name": "@ludo/redis",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "test:redis": "bun run src/__tests__/redis-test.ts"
+  },
+  "dependencies": {
+    "ioredis": "^5.6.1"
+  },
+  "devDependencies": {
+    "@types/ioredis": "^5.0.0",
+    "@types/node": "^20",
+    "typescript": "^5"
+  }
+}
