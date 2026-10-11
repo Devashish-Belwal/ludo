@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { updateUsername } from "@/actions/user";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +12,7 @@ interface UsernameCardProps {
 }
 
 export function UsernameCard({ initialUsername }: UsernameCardProps) {
+  const router = useRouter();
   const [username, setUsername] = useState(initialUsername ?? "");
   const [currentSaved, setCurrentSaved] = useState(initialUsername ?? "");
   const [error, setError] = useState<string | null>(null);
@@ -35,6 +37,7 @@ export function UsernameCard({ initialUsername }: UsernameCardProps) {
         setCurrentSaved(res.username);
         setUsername(res.username);
         setSuccess("Username saved successfully!");
+        router.refresh(); // Seamlessly update server components (Navbar & Play buttons)
       }
     } catch {
       setError("An unexpected error occurred. Please try again.");
