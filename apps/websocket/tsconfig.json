@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "moduleResolution": "node",
+    "module": "CommonJS",
+    "target": "ES2022",
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "noEmit": false,
+    "baseUrl": ".",
+    "paths": {
+      "@ludo/shared": ["../../packages/shared/dist/index.d.ts"],
+      "@ludo/redis": ["../../packages/redis/dist/index.d.ts"]
+    }
+  },
+  "include": ["src/**/*"]
+}

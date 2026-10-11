@@ -1,0 +1,29 @@
+{
+  "name": "websocket-service",
+  "version": "1.0.0",
+  "private": true,
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "test:ws": "tsx src/__tests__/websocket-test.ts"
+  },
+  "dependencies": {
+    "@ludo/redis": "workspace:*",
+    "@ludo/shared": "workspace:*",
+    "dotenv": "^16.4.7",
+    "ioredis": "^5.6.1",
+    "jose": "^6.2.12",
+    "ws": "^8.18.1",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/ws": "^8.18.0",
+    "tsx": "^4.19.3",
+    "typescript": "^5"
+  }
+}

@@ -26,24 +26,43 @@ export function createRedisClient(options?: RedisOptions): Redis {
   });
 }
 
-/**
- * Reusable default Redis client for standard commands (singleton in Node/Next dev).
- */
-export const redis: Redis =
-  globalForRedis.redisClient ??
-  createRedisClient();
-
-if (process.env.NODE_ENV !== "production") {
-  globalForRedis.redisClient = redis;
-}
+let _client: Redis | undefined;
+let _subClient: Redis | undefined;
 
 /**
- * Reusable subscriber Redis client for Redis Pub/Sub (dedicated connection required by Redis).
+ * Reusable default Redis client for standard commands (lazy singleton).
  */
-export const redisSubscriber: Redis =
-  globalForRedis.redisSubClient ??
-  createRedisClient();
+export const redis: Redis = new Proxy({} as Redis, {
+  get(_target, prop, receiver) {
+    if (!_client) {
+      _client = globalForRedis.redisClient ?? createRedisClient();
+      if (process.env.NODE_ENV !== "production") {
+        globalForRedis.redisClient = _client;
+      }
+    }
+    const val = Reflect.get(_client, prop, receiver);
+    if (typeof val === "function") {
+      return val.bind(_client);
+    }
+    return val;
+  },
+});
 
-if (process.env.NODE_ENV !== "production") {
-  globalForRedis.redisSubClient = redisSubscriber;
-}
+/**
+ * Reusable subscriber Redis client for Redis Pub/Sub (lazy singleton).
+ */
+export const redisSubscriber: Redis = new Proxy({} as Redis, {
+  get(_target, prop, receiver) {
+    if (!_subClient) {
+      _subClient = globalForRedis.redisSubClient ?? createRedisClient();
+      if (process.env.NODE_ENV !== "production") {
+        globalForRedis.redisSubClient = _subClient;
+      }
+    }
+    const val = Reflect.get(_subClient, prop, receiver);
+    if (typeof val === "function") {
+      return val.bind(_subClient);
+    }
+    return val;
+  },
+});
