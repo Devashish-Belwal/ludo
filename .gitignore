@@ -37,3 +37,6 @@ Thumbs.db
 *.tsbuildinfo
 
 project-context/
+
+# Project progress tracking
+progress.md
