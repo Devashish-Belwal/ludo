@@ -86,17 +86,27 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
+            # Ensure Docker and Docker Compose are installed on EC2
+            if ! command -v docker &> /dev/null; then
+              echo "Docker not found on EC2. Installing Docker & Docker Compose..."
+              sudo apt-get update -y
+              sudo apt-get install -y docker.io docker-compose-v2
+              sudo systemctl enable --now docker
+              sudo usermod -aG docker "$USER" || true
+            fi
+
             # Ensure .env file exists on EC2
             if [ ! -f .env ]; then
-              echo "Warning: .env file missing on EC2. Please ensure .env is populated."
+              echo "Notice: .env not found. Creating from .env.production.example..."
+              cp .env.production.example .env
             fi
 
             # Rebuild and restart Docker containers
             echo "Rebuilding and restarting Docker containers..."
-            docker compose down --remove-orphans || true
-            docker compose up -d --build
+            sudo docker compose down --remove-orphans || true
+            sudo docker compose up -d --build
 
             # Clean up unused dangling images to preserve disk space
-            docker image prune -f
+            sudo docker image prune -f
 
             echo "==== Deployment Completed Successfully ===="
