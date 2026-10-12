@@ -70,27 +70,31 @@ export function WaitingRoom({
     let isMounted = true;
 
     const fetchState = async () => {
-      const res = await getWaitingRoomStateAction(gameId);
-      if (!isMounted) return;
+      try {
+        const res = await getWaitingRoomStateAction(gameId);
+        if (!isMounted) return;
 
-      if (res.success && res.data) {
-        if (res.data.status === "ABANDONED") {
-          setError("The host has left and closed the room. Returning to lobby...");
+        if (res.success && res.data) {
+          if (res.data.status === "ABANDONED") {
+            setError("The host has left and closed the room. Returning to lobby...");
+            setTimeout(() => {
+              if (isMounted) onLeave();
+            }, 1500);
+            return;
+          }
+
+          setRoom(res.data);
+          if (res.data.status === "IN_PROGRESS") {
+            onGameStarted?.();
+          }
+        } else {
+          setError(res.error || "Room was closed or expired. Returning to lobby...");
           setTimeout(() => {
             if (isMounted) onLeave();
           }, 1500);
-          return;
         }
-
-        setRoom(res.data);
-        if (res.data.status === "IN_PROGRESS") {
-          onGameStarted?.();
-        }
-      } else {
-        setError(res.error || "Room was closed or expired. Returning to lobby...");
-        setTimeout(() => {
-          if (isMounted) onLeave();
-        }, 1500);
+      } catch {
+        // Suppress network abort or fetch failures when unmounting
       }
     };
 

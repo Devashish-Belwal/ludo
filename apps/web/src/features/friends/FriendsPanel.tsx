@@ -46,12 +46,16 @@ export function FriendsPanel() {
 
   useEffect(() => {
     let active = true;
-    Promise.all([getFriends(), getIncomingFriendRequests()]).then(([fRes, rRes]) => {
-      if (active) {
-        if (fRes.success && fRes.data) setFriends(fRes.data);
-        if (rRes.success && rRes.data) setIncomingRequests(rRes.data);
-      }
-    });
+    Promise.all([getFriends(), getIncomingFriendRequests()])
+      .then(([fRes, rRes]) => {
+        if (active) {
+          if (fRes.success && fRes.data) setFriends(fRes.data);
+          if (rRes.success && rRes.data) setIncomingRequests(rRes.data);
+        }
+      })
+      .catch(() => {
+        // Suppress fetch error during component unmount
+      });
     return () => {
       active = false;
     };

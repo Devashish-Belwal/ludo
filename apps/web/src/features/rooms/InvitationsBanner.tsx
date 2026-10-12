@@ -22,10 +22,14 @@ export function InvitationsBanner({ onAccepted }: InvitationsBannerProps) {
     let isMounted = true;
 
     const checkInvitations = async () => {
-      const res = await getPendingInvitationsAction();
-      if (!isMounted) return;
-      if (res.success && res.data) {
-        setInvitations(res.data);
+      try {
+        const res = await getPendingInvitationsAction();
+        if (!isMounted) return;
+        if (res.success && res.data) {
+          setInvitations(res.data);
+        }
+      } catch {
+        // Suppress network abort or fetch failures when unmounting
       }
     };
 
