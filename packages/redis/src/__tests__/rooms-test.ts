@@ -194,19 +194,51 @@ async function runMilestone8Tests() {
     }
     console.log("✓ Game started: status is IN_PROGRESS, empty slots 2 & 3 remain null, TTL cleared.");
 
-    // 11. Cleanup test keys
-    console.log("11. Cleaning up test data...");
+    // 11. Testing Host Leaving Waiting Room & Releasing all Guests
+    console.log("11. Testing host leaving waiting room and releasing guests...");
+    const host2Id = `host2-${Date.now()}`;
+    const guestId = `guest2-${Date.now()}`;
+    const game2Id = `game-leave-${Date.now()}`;
+    await createPrivateRoom(testRedis, {
+      gameId: game2Id,
+      hostId: host2Id,
+      hostUsername: "Host2",
+      invitedFriends: [{ userId: guestId, username: "Guest2" }],
+    });
+    const guestInvites = await getUserPendingInvitations(testRedis, guestId);
+    await acceptInvitationAtomically(testRedis, guestInvites[0].inviteId, guestId, "Guest2", game2Id);
+
+    const hActiveBefore = await getUserActiveGame(testRedis, host2Id);
+    const gActiveBefore = await getUserActiveGame(testRedis, guestId);
+    if (hActiveBefore !== game2Id || gActiveBefore !== game2Id) {
+      throw new Error("Host or guest not active before host leave!");
+    }
+
+    const leaveResult = await leaveWaitingRoom(testRedis, game2Id, host2Id);
+    if (!leaveResult.abandoned) throw new Error("Room was not abandoned on host leave");
+
+    const hActiveAfter = await getUserActiveGame(testRedis, host2Id);
+    const gActiveAfter = await getUserActiveGame(testRedis, guestId);
+    if (hActiveAfter !== null) throw new Error("Host active game was not cleared!");
+    if (gActiveAfter !== null) throw new Error("Guest active game was not released on host leave!");
+    console.log("✓ Host leaving waiting room abandoned room and released all guest reservations.");
+
+    // 12. Cleanup test keys
+    console.log("12. Cleaning up test data...");
     await removeUserActiveGame(testRedis, hostId);
     await removeUserActiveGame(testRedis, friend1.userId);
     await testRedis.del(
       RedisKeys.game(gameId),
+      RedisKeys.game(game2Id),
       RedisKeys.gamePlayers(gameId),
+      RedisKeys.gamePlayers(game2Id),
       RedisKeys.invite(invitations[0].inviteId),
       RedisKeys.invite(invitations[1].inviteId),
       RedisKeys.invite(invitations[2].inviteId),
       RedisKeys.userInvitations(friend1.userId),
       RedisKeys.userInvitations(friend2.userId),
-      RedisKeys.userInvitations(friend3.userId)
+      RedisKeys.userInvitations(friend3.userId),
+      RedisKeys.userInvitations(guestId)
     );
 
     console.log("\nAll Milestone 8 Private Games & Invitations tests passed successfully!");

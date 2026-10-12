@@ -233,17 +233,31 @@ export async function leaveWaitingRoom(
   const isHost = hostPlayer?.userId === userId;
 
   if (isHost || game.status !== "WAITING") {
-    // Host left or room abandoned: clean up all participants
-    const playerIds = await redis.smembers(RedisKeys.gamePlayers(gameId));
-    for (const pid of playerIds) {
+    // Host left or room abandoned: clean up all participants from both game.players and Redis set
+    const allPlayerIds = new Set<string>();
+    for (const p of game.players) {
+      if (p?.userId) {
+        allPlayerIds.add(p.userId);
+      }
+    }
+    const setMembers = await redis.smembers(RedisKeys.gamePlayers(gameId));
+    for (const m of setMembers) {
+      allPlayerIds.add(m);
+    }
+
+    for (const pid of allPlayerIds) {
       await removeUserActiveGame(redis, pid);
     }
+
     game.status = "ABANDONED";
     game.version += 1;
     await redis.set(RedisKeys.game(gameId), JSON.stringify(game), "EX", 30);
     await redis.del(RedisKeys.gamePlayers(gameId));
 
-    await publishGameEvent(redis, gameId, ServerEvents.GAME_ABANDONED, { gameId });
+    await publishGameEvent(redis, gameId, ServerEvents.GAME_ABANDONED, {
+      gameId,
+      reason: "HOST_LEFT",
+    });
     return { abandoned: true, updatedGame: game };
   }
 

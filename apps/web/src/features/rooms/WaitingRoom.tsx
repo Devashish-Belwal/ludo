@@ -74,22 +74,33 @@ export function WaitingRoom({
       if (!isMounted) return;
 
       if (res.success && res.data) {
+        if (res.data.status === "ABANDONED") {
+          setError("The host has left and closed the room. Returning to lobby...");
+          setTimeout(() => {
+            if (isMounted) onLeave();
+          }, 1500);
+          return;
+        }
+
         setRoom(res.data);
         if (res.data.status === "IN_PROGRESS") {
           onGameStarted?.();
         }
       } else {
-        setError(res.error || "Room was closed or expired");
+        setError(res.error || "Room was closed or expired. Returning to lobby...");
+        setTimeout(() => {
+          if (isMounted) onLeave();
+        }, 1500);
       }
     };
 
     fetchState();
-    const interval = setInterval(fetchState, 2000);
+    const interval = setInterval(fetchState, 1000);
     return () => {
       isMounted = false;
       clearInterval(interval);
     };
-  }, [gameId, onGameStarted]);
+  }, [gameId, onGameStarted, onLeave]);
 
   // Expiration countdown timer
   useEffect(() => {
