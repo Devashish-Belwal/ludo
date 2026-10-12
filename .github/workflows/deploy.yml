@@ -13,6 +13,13 @@ jobs:
   test:
     name: Lint, Typecheck & Test
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/ludo?schema=public"
+      AUTH_SECRET: "ci-dummy-auth-secret-for-build-validation"
+      WS_TOKEN_SECRET: "ci-dummy-ws-token-secret-for-build-validation"
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_APP_URL: "http://localhost:3000"
+      NEXT_PUBLIC_WS_URL: "ws://localhost:3001"
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -39,10 +46,6 @@ jobs:
 
       - name: Production Build Test
         run: bun run build
-        env:
-          NEXT_TELEMETRY_DISABLED: 1
-          AUTH_SECRET: "ci-dummy-auth-secret-for-build-validation"
-          WS_TOKEN_SECRET: "ci-dummy-ws-token-secret-for-build-validation"
 
   # Job 2: Continuous Deployment to AWS EC2 (Runs on push to main)
   deploy:
