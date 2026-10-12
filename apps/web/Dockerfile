@@ -39,7 +39,7 @@ COPY packages/ ./packages/
 COPY apps/web/ ./apps/web/
 
 # Generate Prisma Client for database queries
-RUN bun --filter @ludo/database run prisma:generate
+RUN bun --cwd packages/database run prisma:generate
 
 # Build shared packages and production Next.js bundle
 ENV NODE_ENV=production
@@ -64,4 +64,4 @@ COPY --from=builder /app/apps/web ./apps/web
 EXPOSE 3000
 
 # Start Next.js production server
-CMD ["bun", "--filter", "web", "start"]
+CMD ["bun", "--cwd", "apps/web", "run", "start"]

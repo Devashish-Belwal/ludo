@@ -26,7 +26,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Generate Prisma Client
-        run: bun --filter @ludo/database run prisma:generate
+        run: bun --cwd packages/database run prisma:generate
 
       - name: Typecheck Monorepo
         run: bun run typecheck
@@ -35,7 +35,7 @@ jobs:
         run: bun run lint
 
       - name: Run Game Engine Tests
-        run: bun --filter @ludo/game-engine test:engine
+        run: bun --cwd packages/game-engine test:engine
 
       - name: Production Build Test
         run: bun run build

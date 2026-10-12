@@ -39,10 +39,10 @@ COPY apps/websocket/ ./apps/websocket/
 
 # Build TypeScript packages and websocket service
 ENV NODE_ENV=production
-RUN bun --filter @ludo/shared run build
-RUN bun --filter @ludo/game-engine run build
-RUN bun --filter @ludo/redis run build
-RUN bun --filter websocket-service run build
+RUN bun --cwd packages/shared run build
+RUN bun --cwd packages/game-engine run build
+RUN bun --cwd packages/redis run build
+RUN bun --cwd apps/websocket run build
 
 # 4. Production Runner stage
 FROM base AS runner

@@ -11,7 +11,8 @@
     "build": "turbo build",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
-    "clean": "turbo clean"
+    "clean": "turbo clean",
+    "db:generate": "bun --cwd packages/database run prisma:generate"
   },
   "devDependencies": {
     "turbo": "^2.4.4"
