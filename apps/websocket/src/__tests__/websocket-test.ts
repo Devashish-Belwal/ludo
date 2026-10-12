@@ -1,6 +1,8 @@
 import "dotenv/config";
 import WebSocket from "ws";
 import { SignJWT } from "jose";
+import { spawn, type ChildProcess } from "node:child_process";
+import path from "node:path";
 import { createRedisClient, publishUserEvent, publishGameEvent, RedisKeys } from "@ludo/redis";
 import { ServerEvents, ClientCommands } from "@ludo/shared";
 
@@ -19,15 +21,49 @@ async function generateTestTicket(userId: string): Promise<string> {
     .sign(secretKey);
 }
 
+async function ensureServerRunning(port: string): Promise<ChildProcess | null> {
+  try {
+    const res = await fetch(`http://localhost:${port}/health`);
+    if (res.ok) return null;
+  } catch {
+    // Not running yet
+  }
+
+  console.log(`[Test] Launching local WebSocket server on port ${port}...`);
+  const serverPath = path.resolve(__dirname, "../server.ts");
+  const child = spawn("bun", ["run", serverPath], {
+    stdio: "pipe",
+    env: { ...process.env, WS_PORT: port },
+  });
+
+  for (let i = 0; i < 40; i++) {
+    await new Promise((r) => setTimeout(r, 250));
+    try {
+      const res = await fetch(`http://localhost:${port}/health`);
+      if (res.ok) {
+        console.log(`[Test] WebSocket server ready on port ${port}.`);
+        return child;
+      }
+    } catch {
+      // Continue polling
+    }
+  }
+
+  child.kill();
+  throw new Error(`WebSocket server did not respond on port ${port} within 10s`);
+}
+
 async function runWebSocketTests() {
   console.log("Starting Milestone 6 WebSocket Infrastructure Automated Tests...");
+
+  const wsPort = process.env.WS_PORT || "3001";
+  const serverProc = await ensureServerRunning(wsPort);
 
   const testUserId = `user-ws-test-${Date.now()}`;
   const validTicket = await generateTestTicket(testUserId);
   const redis = createRedisClient();
   await redis.connect();
 
-  const wsPort = process.env.WS_PORT || "3001";
   const wsUrl = `ws://localhost:${wsPort}?ticket=${validTicket}&deviceId=device-1`;
 
   // 1. Test Unauthenticated Connection Rejection
@@ -149,6 +185,10 @@ async function runWebSocketTests() {
   ws2.close();
   await redis.del(RedisKeys.presence(testUserId), RedisKeys.userConnections(testUserId));
   await redis.quit();
+
+  if (serverProc) {
+    serverProc.kill("SIGTERM");
+  }
 
   console.log("All Milestone 6 WebSocket tests completed successfully!");
   process.exit(0);
