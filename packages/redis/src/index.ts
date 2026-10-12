@@ -9,3 +9,5 @@ export * from "./scripts/accept-invitation.lua";
 export * from "./invitations";
 export * from "./game/private-room";
 export * from "./matchmaking";
+export * from "./game/play-game";
+export type { TokenKey } from "@ludo/game-engine";

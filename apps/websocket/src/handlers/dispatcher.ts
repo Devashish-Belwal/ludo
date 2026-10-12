@@ -9,6 +9,9 @@ import {
   getGameState,
   joinMatchmakingQueue,
   cancelMatchmakingQueue,
+  handleRollDice,
+  handleMoveToken,
+  type TokenKey,
 } from "@ludo/redis";
 
 /**
@@ -151,6 +154,48 @@ export async function handleClientMessage(
           socket,
           result.error || "MATCHMAKING_ALREADY_RESERVED",
           "Match found and reserved; cancellation rejected",
+          actionId
+        );
+      }
+      break;
+    }
+
+    case ClientCommands.ROLL_DICE: {
+      const p = payload as { gameId?: string };
+      if (!p?.gameId) {
+        sendErrorMessage(socket, "INVALID_MESSAGE", "gameId required", actionId);
+        break;
+      }
+
+      const res = await handleRollDice(redis, p.gameId, socket.userId);
+      if (res.success && res.result) {
+        sendServerMessage(socket, ServerEvents.DICE_ROLLED, res.result, actionId);
+      } else {
+        sendErrorMessage(
+          socket,
+          res.error || "ROLL_DICE_ERROR",
+          res.error || "Failed to roll dice",
+          actionId
+        );
+      }
+      break;
+    }
+
+    case ClientCommands.MOVE_TOKEN: {
+      const p = payload as { gameId?: string; tokenKey?: TokenKey };
+      if (!p?.gameId || !p?.tokenKey) {
+        sendErrorMessage(socket, "INVALID_MESSAGE", "gameId and tokenKey required", actionId);
+        break;
+      }
+
+      const res = await handleMoveToken(redis, p.gameId, socket.userId, p.tokenKey);
+      if (res.success && res.result) {
+        sendServerMessage(socket, ServerEvents.TOKEN_MOVED, res.result, actionId);
+      } else {
+        sendErrorMessage(
+          socket,
+          res.error || "MOVE_TOKEN_ERROR",
+          res.error || "Failed to move token",
           actionId
         );
       }

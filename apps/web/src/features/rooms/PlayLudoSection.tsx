@@ -5,7 +5,9 @@ import { CreateRoomModal } from "./CreateRoomModal";
 import { WaitingRoom } from "./WaitingRoom";
 import { InvitationsBanner } from "./InvitationsBanner";
 import { MatchmakingModal } from "@/features/matchmaking/MatchmakingModal";
+import { GameRoom } from "@/features/board/GameRoom";
 import { getMatchmakingStatusAction } from "@/actions/matchmaking";
+import { getGameStateAction } from "@/actions/game";
 import { Users, Swords } from "lucide-react";
 
 interface PlayLudoSectionProps {
@@ -18,6 +20,7 @@ export function PlayLudoSection({
   username,
 }: PlayLudoSectionProps) {
   const [activeGameId, setActiveGameId] = useState<string | null>(null);
+  const [isBoardLive, setIsBoardLive] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isMatchmakingOpen, setIsMatchmakingOpen] = useState(false);
 
@@ -28,7 +31,14 @@ export function PlayLudoSection({
       .then((res) => {
         if (!isMounted) return;
         if (res.success && res.data?.inGame && res.data.gameId) {
-          setActiveGameId(res.data.gameId);
+          const gameId = res.data.gameId;
+          setActiveGameId(gameId);
+          // Check if game is already in progress
+          getGameStateAction(gameId).then((gRes) => {
+            if (isMounted && gRes.success && gRes.game?.status === "IN_PROGRESS") {
+              setIsBoardLive(true);
+            }
+          });
         }
       })
       .catch(() => {});
@@ -37,17 +47,48 @@ export function PlayLudoSection({
     };
   }, []);
 
-  // If currently in a waiting room, render the WaitingRoom lobby
-  if (activeGameId) {
+  // When activeGameId is set, check if game is in progress
+  useEffect(() => {
+    if (!activeGameId) return;
+    let isMounted = true;
+    getGameStateAction(activeGameId).then((res) => {
+      if (isMounted && res.success && res.game?.status === "IN_PROGRESS") {
+        setIsBoardLive(true);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [activeGameId]);
+
+  // If in an active live game, render the full 15x15 interactive GameRoom
+  if (activeGameId && isBoardLive) {
+    return (
+      <div className="space-y-6">
+        <GameRoom
+          gameId={activeGameId}
+          currentUserId={currentUserId}
+          onLeave={() => {
+            setActiveGameId(null);
+            setIsBoardLive(false);
+          }}
+        />
+      </div>
+    );
+  }
+
+  // If in a private waiting lobby, render WaitingRoom
+  if (activeGameId && !isBoardLive) {
     return (
       <div className="space-y-6">
         <WaitingRoom
           gameId={activeGameId}
           currentUserId={currentUserId}
-          onLeave={() => setActiveGameId(null)}
-          onGameStarted={() => {
-            console.log("Game started! Transitioning to board...");
+          onLeave={() => {
+            setActiveGameId(null);
+            setIsBoardLive(false);
           }}
+          onGameStarted={() => setIsBoardLive(true)}
         />
       </div>
     );
