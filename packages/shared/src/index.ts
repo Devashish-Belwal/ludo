@@ -3,4 +3,4 @@ export * from "./types/auth";
 export * from "./types/friends";
 export * from "./types/websocket";
 export * from "./types/rooms";
-
+export * from "./types/matchmaking";

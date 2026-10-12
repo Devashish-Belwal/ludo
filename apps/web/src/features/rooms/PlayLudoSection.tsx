@@ -4,6 +4,7 @@ import { useState } from "react";
 import { CreateRoomModal } from "./CreateRoomModal";
 import { WaitingRoom } from "./WaitingRoom";
 import { InvitationsBanner } from "./InvitationsBanner";
+import { MatchmakingModal } from "@/features/matchmaking/MatchmakingModal";
 import { Users, Swords } from "lucide-react";
 
 interface PlayLudoSectionProps {
@@ -17,6 +18,7 @@ export function PlayLudoSection({
 }: PlayLudoSectionProps) {
   const [activeGameId, setActiveGameId] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isMatchmakingOpen, setIsMatchmakingOpen] = useState(false);
 
   // If currently in a waiting room, render the WaitingRoom lobby
   if (activeGameId) {
@@ -52,6 +54,7 @@ export function PlayLudoSection({
         <div className="flex flex-wrap gap-4 pt-2">
           <button
             disabled={!username}
+            onClick={() => setIsMatchmakingOpen(true)}
             className="inline-flex items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             Play Public
@@ -73,6 +76,16 @@ export function PlayLudoSection({
           </p>
         )}
       </div>
+
+      {/* Public Matchmaking Modal */}
+      <MatchmakingModal
+        isOpen={isMatchmakingOpen}
+        onClose={() => setIsMatchmakingOpen(false)}
+        onMatchFound={(gameId) => {
+          setIsMatchmakingOpen(false);
+          setActiveGameId(gameId);
+        }}
+      />
 
       {/* Create Room Modal */}
       <CreateRoomModal

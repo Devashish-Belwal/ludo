@@ -8,3 +8,4 @@ export * from "./scripts/matchmaking.lua";
 export * from "./scripts/accept-invitation.lua";
 export * from "./invitations";
 export * from "./game/private-room";
+export * from "./matchmaking";

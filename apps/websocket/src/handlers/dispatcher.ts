@@ -3,7 +3,13 @@ import type { AuthenticatedSocket } from "../connection/registry";
 import type { ConnectionRegistry } from "../connection/registry";
 import { clientMessageSchema, ClientCommands, ServerEvents } from "@ludo/shared";
 import { sendServerMessage, sendErrorMessage } from "./sender";
-import { refreshPresenceHeartbeat, startPrivateRoomGame, getGameState } from "@ludo/redis";
+import {
+  refreshPresenceHeartbeat,
+  startPrivateRoomGame,
+  getGameState,
+  joinMatchmakingQueue,
+  cancelMatchmakingQueue,
+} from "@ludo/redis";
 
 /**
  * Handles incoming client messages over WebSocket.
@@ -103,6 +109,50 @@ export async function handleClientMessage(
         sendServerMessage(socket, ServerEvents.GAME_STATE, game, actionId);
       } else {
         sendErrorMessage(socket, "GAME_NOT_FOUND", "Game not found", actionId);
+      }
+      break;
+    }
+
+    case ClientCommands.JOIN_MATCHMAKING: {
+      const p = payload as { username?: string };
+      const username = p?.username || `Player_${socket.userId.slice(0, 6)}`;
+      const result = await joinMatchmakingQueue(redis, socket.userId, username);
+      if (result.success) {
+        sendServerMessage(
+          socket,
+          ServerEvents.MATCHMAKING_JOINED,
+          { userId: socket.userId, queueEntryTime: result.queueEntryTime },
+          actionId
+        );
+      } else {
+        sendErrorMessage(
+          socket,
+          result.error || "MATCHMAKING_ERROR",
+          result.error === "ALREADY_IN_GAME"
+            ? "Cannot join matchmaking while in an active game"
+            : "Failed to join matchmaking",
+          actionId
+        );
+      }
+      break;
+    }
+
+    case ClientCommands.CANCEL_MATCHMAKING: {
+      const result = await cancelMatchmakingQueue(redis, socket.userId);
+      if (result.success) {
+        sendServerMessage(
+          socket,
+          ServerEvents.MATCHMAKING_CANCELLED,
+          { userId: socket.userId },
+          actionId
+        );
+      } else {
+        sendErrorMessage(
+          socket,
+          result.error || "MATCHMAKING_ALREADY_RESERVED",
+          "Match found and reserved; cancellation rejected",
+          actionId
+        );
       }
       break;
     }

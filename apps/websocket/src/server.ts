@@ -10,6 +10,7 @@ import {
   createRedisClient,
   registerConnection,
   removeConnection,
+  MatchmakingWorker,
 } from "@ludo/redis";
 import { ServerEvents } from "@ludo/shared";
 
@@ -40,6 +41,10 @@ async function bootstrap() {
 
   await setupPubSubListener(redisSubscriber, registry);
   console.log("[WebSocket] Redis Pub/Sub listeners initialized.");
+
+  // Initialize and start single FIFO matchmaking worker per Section 10.5
+  const matchmakingWorker = new MatchmakingWorker(redis, { intervalMs: 500 });
+  await matchmakingWorker.start();
 
   // Upgrade HTTP to WebSocket with authentication ticket verification
   server.on("upgrade", async (request, socket, head) => {
