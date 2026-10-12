@@ -24,25 +24,26 @@ COPY apps/websocket/package.json ./apps/websocket/
 # Install all workspace dependencies
 RUN bun install --frozen-lockfile
 
+# Generate Prisma Client in deps stage where packages/database/node_modules exists
+ENV DATABASE_URL="postgresql://postgres:postgres@localhost:5432/ludo?schema=public"
+RUN bun --cwd packages/database run prisma:generate
+
 # 3. Builder stage
 FROM base AS builder
 WORKDIR /app
-ENV PATH="/app/node_modules/.bin:${PATH}"
+ENV PATH="/app/node_modules/.bin:/app/packages/database/node_modules/.bin:${PATH}"
 
-# Copy dependencies and node_modules from deps stage
+# Copy source files first
+COPY packages/ ./packages/
+COPY apps/web/ ./apps/web/
+
+# Copy dependencies and node_modules from deps stage (after source files to preserve node_modules)
 COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/packages/database/node_modules ./packages/database/node_modules
 COPY --from=deps /app/package.json ./package.json
 COPY --from=deps /app/bun.lock ./bun.lock
 COPY --from=deps /app/turbo.json ./turbo.json
 COPY --from=deps /app/tsconfig.base.json ./tsconfig.base.json
-
-# Copy all source files
-COPY packages/ ./packages/
-COPY apps/web/ ./apps/web/
-
-# Generate Prisma Client for database queries
-ENV DATABASE_URL="postgresql://postgres:postgres@localhost:5432/ludo?schema=public"
-RUN bunx prisma generate --schema=packages/database/prisma/schema.prisma
 
 # Build shared packages and production Next.js bundle
 ENV NODE_ENV=production
