@@ -5,8 +5,8 @@ import {
   getGameStateAction,
   rollDiceAction,
   moveTokenAction,
+  leaveGameAction,
 } from "@/actions/game";
-import { leaveWaitingRoomAction } from "@/actions/rooms";
 import { LudoBoard } from "./LudoBoard";
 import { DiceRoller } from "./DiceRoller";
 import { PlayerCard } from "./PlayerCard";
@@ -103,6 +103,8 @@ export function GameRoom({ gameId, currentUserId, onLeave }: GameRoomProps) {
           if (!isMounted) return;
           if (res.success && res.game) {
             setGameState(res.game);
+          } else if (res.error === "Game not found") {
+            setGameState((prev) => (prev ? { ...prev, status: "ABANDONED" } : null));
           }
         })
         .catch(() => {});
@@ -181,6 +183,8 @@ export function GameRoom({ gameId, currentUserId, onLeave }: GameRoomProps) {
                 "PLAYER_CAPTURED",
                 "PLAYER_WON",
                 "GAME_PLAYER_LEFT",
+                "GAME_COMPLETED",
+                "GAME_ABANDONED",
               ].includes(data.type)
             ) {
               fetchState();
@@ -272,7 +276,7 @@ export function GameRoom({ gameId, currentUserId, onLeave }: GameRoomProps) {
   const handleLeaveGame = async () => {
     setIsLeaving(true);
     try {
-      await leaveWaitingRoomAction(gameId);
+      await leaveGameAction(gameId);
     } finally {
       setIsLeaving(false);
       onLeave();
@@ -332,6 +336,27 @@ export function GameRoom({ gameId, currentUserId, onLeave }: GameRoomProps) {
             <Button
               onClick={handleLeaveGame}
               className="w-full bg-amber-500 hover:bg-amber-600 text-zinc-950 font-bold"
+            >
+              Return to Dashboard
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Match Abandoned Modal */}
+      {gameState.status === "ABANDONED" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in">
+          <div className="bg-zinc-900 border border-zinc-700 rounded-2xl max-w-md w-full p-6 text-center shadow-2xl">
+            <div className="w-12 h-12 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <h3 className="text-lg font-bold text-zinc-100 mb-2">Match Ended</h3>
+            <p className="text-sm text-zinc-400 mb-6">
+              The match has ended because all opponents left the game.
+            </p>
+            <Button
+              onClick={handleLeaveGame}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold"
             >
               Return to Dashboard
             </Button>
@@ -467,6 +492,9 @@ export function GameRoom({ gameId, currentUserId, onLeave }: GameRoomProps) {
           winnerUsername={winnerPlayer.username}
           winnerColor={winnerPlayer.color}
           isCurrentUserWinner={winnerPlayer.userId === currentUserId}
+          isForfeit={
+            Object.values(winnerPlayer.tokens).filter((t) => t.type === "FINISHED").length < 4
+          }
           onReturnToLobby={handleLeaveGame}
         />
       )}

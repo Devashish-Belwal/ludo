@@ -16,6 +16,7 @@ interface WinnerModalProps {
   winnerUsername: string;
   winnerColor: PlayerColor;
   isCurrentUserWinner: boolean;
+  isForfeit?: boolean;
   onReturnToLobby: () => void;
 }
 
@@ -24,6 +25,7 @@ export function WinnerModal({
   winnerUsername,
   winnerColor,
   isCurrentUserWinner,
+  isForfeit,
   onReturnToLobby,
 }: WinnerModalProps) {
   return (
@@ -47,7 +49,11 @@ export function WinnerModal({
           </DialogTitle>
 
           <DialogDescription className="text-zinc-400 text-sm mt-2">
-            {isCurrentUserWinner
+            {isForfeit
+              ? isCurrentUserWinner
+                ? "Opponent left the match. You won by forfeit!"
+                : `${winnerUsername} won by forfeit.`
+              : isCurrentUserWinner
               ? "Congratulations! You have successfully brought all 4 tokens home!"
               : `${winnerUsername} (${winnerColor}) brought all 4 tokens into the center finish.`}
           </DialogDescription>

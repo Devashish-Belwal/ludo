@@ -3,6 +3,7 @@ import { RedisKeys, RedisTTL } from "../keys";
 import { publishGameEvent, publishUserEvent } from "../pubsub";
 import { setUserActiveGame, removeUserActiveGame, getUserActiveGame } from "./active-mapping";
 import { createInvitation } from "../invitations";
+import { leaveActiveGame } from "./play-game";
 import {
   createGame,
   startGame,
@@ -230,11 +231,17 @@ export async function leaveWaitingRoom(
     return { abandoned: true };
   }
 
+  // If game is already active (IN_PROGRESS), handle with authoritative active game leave logic
+  if (game.status === "IN_PROGRESS") {
+    const res = await leaveActiveGame(redis, gameId, userId);
+    return { abandoned: res.game?.status === "ABANDONED", updatedGame: res.game };
+  }
+
   const hostPlayer = game.players[0];
   const isHost = hostPlayer?.userId === userId;
 
   if (isHost || game.status !== "WAITING") {
-    // Host left or room abandoned: clean up all participants from both game.players and Redis set
+    // Host left waiting lobby: clean up all participants from both game.players and Redis set
     const allPlayerIds = new Set<string>();
     for (const p of game.players) {
       if (p?.userId) {

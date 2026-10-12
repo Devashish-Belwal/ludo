@@ -1,9 +1,11 @@
 import type { Redis } from "ioredis";
 import { RedisKeys } from "../keys";
 import { publishGameEvent } from "../pubsub";
+import { removeUserActiveGame } from "./active-mapping";
 import {
   rollDice,
   moveToken,
+  removePlayer,
   type GameState,
   type TokenKey,
   type RollDiceResult,
@@ -205,4 +207,121 @@ export async function handleMoveToken(
     const msg = err instanceof Error ? err.message : "Failed to move token";
     return { success: false, error: msg };
   }
+}
+
+/**
+ * Authoritatively handles a player leaving an active game.
+ * - Clears user's active game reservation
+ * - Authoritatively removes player slot via pure engine removePlayer(game, slot)
+ * - If 1 player remains, awards forfeit victory (COMPLETED)
+ * - If 0 players remain, transitions to ABANDONED
+ * - Broadcasts GAME_PLAYER_LEFT, PLAYER_WON/GAME_COMPLETED or GAME_ABANDONED, and GAME_STATE
+ */
+export async function leaveActiveGame(
+  redis: Redis,
+  gameId: string,
+  userId: string
+): Promise<PlayGameResult> {
+  const game = await getAuthoritativeGameState(redis, gameId);
+  if (!game) {
+    await removeUserActiveGame(redis, userId);
+    return { success: true };
+  }
+
+  // 1. Clear player's active reservation and disconnect state
+  await removeUserActiveGame(redis, userId);
+  await redis.srem(RedisKeys.gamePlayers(gameId), userId);
+  await redis.hdel(RedisKeys.gameDisconnect(gameId), userId);
+
+  // If already not in progress, return
+  if (game.status !== "IN_PROGRESS") {
+    return { success: true, game };
+  }
+
+  // 2. Find player slot
+  const slotIdx = game.players.findIndex((p) => p !== null && p.userId === userId);
+  if (slotIdx === -1) {
+    return { success: true, game };
+  }
+
+  // 3. Remove player authoritatively
+  const updatedGame = removePlayer(game, slotIdx);
+
+  // 4. Handle resulting game status
+  if (updatedGame.status === "COMPLETED") {
+    await redis.set(RedisKeys.game(gameId), JSON.stringify(updatedGame));
+    await redis.srem(RedisKeys.gamesActive(), gameId);
+
+    await publishGameEvent(redis, gameId, ServerEvents.GAME_PLAYER_LEFT, {
+      gameId,
+      userId,
+      slot: slotIdx,
+      reason: "FORFEIT_LEAVE",
+    });
+
+    await publishGameEvent(redis, gameId, ServerEvents.PLAYER_WON, {
+      gameId,
+      winnerSlot: updatedGame.winningSlot,
+      winnerUserId: updatedGame.winnerUserId,
+      reason: "OPPONENT_FORFEIT",
+      version: updatedGame.version,
+    });
+
+    await publishGameEvent(redis, gameId, ServerEvents.GAME_COMPLETED, {
+      gameId,
+      winnerSlot: updatedGame.winningSlot,
+      winnerUserId: updatedGame.winnerUserId,
+      reason: "OPPONENT_FORFEIT",
+      version: updatedGame.version,
+    });
+
+    await publishGameEvent(redis, gameId, ServerEvents.GAME_STATE, updatedGame);
+
+    return { success: true, game: updatedGame };
+  }
+
+  if (updatedGame.status === "ABANDONED") {
+    await redis.set(RedisKeys.game(gameId), JSON.stringify(updatedGame), "EX", 60);
+    await redis.srem(RedisKeys.gamesActive(), gameId);
+
+    await publishGameEvent(redis, gameId, ServerEvents.GAME_PLAYER_LEFT, {
+      gameId,
+      userId,
+      slot: slotIdx,
+      reason: "LEFT",
+    });
+
+    await publishGameEvent(redis, gameId, ServerEvents.GAME_ABANDONED, {
+      gameId,
+      reason: "ALL_PLAYERS_LEFT",
+      version: updatedGame.version,
+    });
+
+    await publishGameEvent(redis, gameId, ServerEvents.GAME_STATE, updatedGame);
+
+    return { success: true, game: updatedGame };
+  }
+
+  // Still IN_PROGRESS (e.g. 2 or 3 players remain out of 3 or 4)
+  await redis.set(RedisKeys.game(gameId), JSON.stringify(updatedGame));
+
+  await publishGameEvent(redis, gameId, ServerEvents.GAME_PLAYER_LEFT, {
+    gameId,
+    userId,
+    slot: slotIdx,
+    reason: "LEFT",
+  });
+
+  if (updatedGame.currentTurn !== game.currentTurn) {
+    await publishGameEvent(redis, gameId, ServerEvents.TURN_CHANGED, {
+      gameId,
+      previousTurn: game.currentTurn,
+      currentTurn: updatedGame.currentTurn,
+      version: updatedGame.version,
+    });
+  }
+
+  await publishGameEvent(redis, gameId, ServerEvents.GAME_STATE, updatedGame);
+
+  return { success: true, game: updatedGame };
 }

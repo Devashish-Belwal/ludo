@@ -5,6 +5,7 @@ import {
   redis,
   handleRollDice,
   handleMoveToken,
+  leaveActiveGame,
   getAuthoritativeGameState,
   type TokenKey,
 } from "@ludo/redis";
@@ -98,6 +99,30 @@ export async function getGameStateAction(
     };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Failed to fetch game state";
+    return { success: false, error: msg };
+  }
+}
+
+/**
+ * Server Action to authoritatively leave an active game (forfeit/concede).
+ */
+export async function leaveGameAction(
+  gameId: string
+): Promise<GameActionResult> {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return { success: false, error: "Unauthorized" };
+  }
+
+  try {
+    const res = await leaveActiveGame(redis, gameId, session.user.id);
+    return {
+      success: res.success,
+      game: res.game,
+      error: res.error,
+    };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Failed to leave game";
     return { success: false, error: msg };
   }
 }

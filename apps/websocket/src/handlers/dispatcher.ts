@@ -11,6 +11,7 @@ import {
   cancelMatchmakingQueue,
   handleRollDice,
   handleMoveToken,
+  leaveActiveGame,
   getProcessedAction,
   saveProcessedAction,
   type TokenKey,
@@ -96,6 +97,7 @@ export async function handleClientMessage(
       const p = payload as { gameId?: string };
       if (p?.gameId) {
         registry.leaveGame(p.gameId, socket.connectionId);
+        await leaveActiveGame(redis, p.gameId, socket.userId);
         sendServerMessage(
           socket,
           ServerEvents.GAME_PLAYER_LEFT,
