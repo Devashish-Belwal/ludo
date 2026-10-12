@@ -1,0 +1,95 @@
+name: CI/CD Pipeline - Test & Deploy to AWS EC2
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  # Job 1: Automated Test & Quality Gate
+  test:
+    name: Lint, Typecheck & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun Runtime
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.13
+
+      - name: Install Workspace Dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        run: bun --filter @ludo/database run prisma:generate
+
+      - name: Typecheck Monorepo
+        run: bun run typecheck
+
+      - name: Lint Codebase
+        run: bun run lint
+
+      - name: Run Game Engine Tests
+        run: bun --filter @ludo/game-engine test:engine
+
+      - name: Production Build Test
+        run: bun run build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+          AUTH_SECRET: "ci-dummy-auth-secret-for-build-validation"
+          WS_TOKEN_SECRET: "ci-dummy-ws-token-secret-for-build-validation"
+
+  # Job 2: Continuous Deployment to AWS EC2 (Runs on push to main)
+  deploy:
+    name: Deploy to AWS EC2
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER || 'ubuntu' }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: ${{ secrets.EC2_PORT || 22 }}
+          script: |
+            set -e
+            echo "==== Starting EC2 Deployment ===="
+
+            # Navigate to project directory
+            APP_DIR="${{ secrets.EC2_APP_DIR || '/home/ubuntu/ludo' }}"
+            if [ ! -d "$APP_DIR" ]; then
+              echo "Cloning repository..."
+              git clone https://github.com/${{ github.repository }}.git "$APP_DIR"
+            fi
+
+            cd "$APP_DIR"
+
+            # Pull latest changes from main
+            echo "Pulling latest code from main..."
+            git fetch origin main
+            git reset --hard origin/main
+
+            # Ensure .env file exists on EC2
+            if [ ! -f .env ]; then
+              echo "Warning: .env file missing on EC2. Please ensure .env is populated."
+            fi
+
+            # Rebuild and restart Docker containers
+            echo "Rebuilding and restarting Docker containers..."
+            docker compose down --remove-orphans || true
+            docker compose up -d --build
+
+            # Clean up unused dangling images to preserve disk space
+            docker image prune -f
+
+            echo "==== Deployment Completed Successfully ===="

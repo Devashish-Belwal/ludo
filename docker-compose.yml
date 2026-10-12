@@ -1,0 +1,56 @@
+services:
+  # Next.js Web Application
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: ludo-web
+    restart: always
+    env_file:
+      - .env
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+    expose:
+      - "3000"
+    networks:
+      - ludo-network
+    depends_on:
+      - websocket
+
+  # Dedicated Node.js WebSocket Service
+  websocket:
+    build:
+      context: .
+      dockerfile: apps/websocket/Dockerfile
+    container_name: ludo-websocket
+    restart: always
+    env_file:
+      - .env
+    environment:
+      - WS_PORT=3001
+      - NODE_ENV=production
+    expose:
+      - "3001"
+    networks:
+      - ludo-network
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: ludo-nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "3001:3001"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - web
+      - websocket
+    networks:
+      - ludo-network
+
+networks:
+  ludo-network:
+    driver: bridge

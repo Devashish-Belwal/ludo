@@ -129,7 +129,8 @@ export function GameRoom({ gameId, currentUserId, onLeave }: GameRoomProps) {
         if (!ticket || !isMounted) return;
 
         const wsHost = window.location.hostname;
-        const socket = new WebSocket(`ws://${wsHost}:3001?ticket=${ticket}&deviceId=web-client`);
+        const wsBaseUrl = process.env.NEXT_PUBLIC_WS_URL || `ws://${wsHost}:3001`;
+        const socket = new WebSocket(`${wsBaseUrl}?ticket=${ticket}&deviceId=web-client`);
 
         socket.onopen = () => {
           if (!isMounted) return;
