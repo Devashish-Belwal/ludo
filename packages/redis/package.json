@@ -8,9 +8,12 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
-    "test:redis": "bun --env-file=../../.env run src/__tests__/redis-test.ts"
+    "test:redis": "bun --env-file=../../.env run src/__tests__/redis-test.ts",
+    "test:rooms": "bun --env-file=../../.env run src/__tests__/rooms-test.ts"
   },
   "dependencies": {
+    "@ludo/shared": "workspace:*",
+    "@ludo/game-engine": "workspace:*",
     "ioredis": "^5.6.1"
   },
   "devDependencies": {

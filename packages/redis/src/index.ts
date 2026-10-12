@@ -5,3 +5,6 @@ export * from "./game/active-mapping";
 export * from "./game/idempotency";
 export * from "./pubsub";
 export * from "./scripts/matchmaking.lua";
+export * from "./scripts/accept-invitation.lua";
+export * from "./invitations";
+export * from "./game/private-room";

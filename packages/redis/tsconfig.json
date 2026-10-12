@@ -7,7 +7,12 @@
     "outDir": "./dist",
     "declaration": true,
     "declarationMap": true,
-    "noEmit": false
+    "noEmit": false,
+    "baseUrl": ".",
+    "paths": {
+      "@ludo/shared": ["../../packages/shared/dist/index.d.ts"],
+      "@ludo/game-engine": ["../../packages/game-engine/dist/index.d.ts"]
+    }
   },
   "include": ["src/**/*"]
 }

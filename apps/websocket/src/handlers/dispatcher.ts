@@ -3,7 +3,7 @@ import type { AuthenticatedSocket } from "../connection/registry";
 import type { ConnectionRegistry } from "../connection/registry";
 import { clientMessageSchema, ClientCommands, ServerEvents } from "@ludo/shared";
 import { sendServerMessage, sendErrorMessage } from "./sender";
-import { refreshPresenceHeartbeat } from "@ludo/redis";
+import { refreshPresenceHeartbeat, startPrivateRoomGame, getGameState } from "@ludo/redis";
 
 /**
  * Handles incoming client messages over WebSocket.
@@ -77,8 +77,37 @@ export async function handleClientMessage(
       break;
     }
 
+    case ClientCommands.START_GAME: {
+      const p = payload as { gameId?: string };
+      if (!p?.gameId) {
+        sendErrorMessage(socket, "INVALID_MESSAGE", "gameId required", actionId);
+        break;
+      }
+      try {
+        const game = await startPrivateRoomGame(redis, p.gameId, socket.userId);
+        sendServerMessage(socket, ServerEvents.GAME_STARTED, game, actionId);
+      } catch (err: any) {
+        sendErrorMessage(socket, "START_GAME_ERROR", err.message || "Failed to start game", actionId);
+      }
+      break;
+    }
+
+    case ClientCommands.REQUEST_GAME_STATE: {
+      const p = payload as { gameId?: string };
+      if (!p?.gameId) {
+        sendErrorMessage(socket, "INVALID_MESSAGE", "gameId required", actionId);
+        break;
+      }
+      const game = await getGameState(redis, p.gameId);
+      if (game) {
+        sendServerMessage(socket, ServerEvents.GAME_STATE, game, actionId);
+      } else {
+        sendErrorMessage(socket, "GAME_NOT_FOUND", "Game not found", actionId);
+      }
+      break;
+    }
+
     default: {
-      // Future milestone handlers (matchmaking, roll dice, move token) will hook in here
       sendServerMessage(
         socket,
         "COMMAND_ACK",
