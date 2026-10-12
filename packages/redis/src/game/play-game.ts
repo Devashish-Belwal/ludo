@@ -245,7 +245,7 @@ export async function leaveActiveGame(
   }
 
   // 2. Find player slot
-  const slotIdx = game.players.findIndex((p) => p !== null && p.userId === userId);
+  const slotIdx = game.players.findIndex((p: any) => p !== null && p.userId === userId);
   if (slotIdx === -1) {
     return { success: true, game };
   }

@@ -38,6 +38,9 @@ jobs:
         env:
           DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/ludo?schema=public"
 
+      - name: Build Monorepo Packages
+        run: bun run build
+
       - name: Typecheck Monorepo
         run: bun run typecheck
 
@@ -47,9 +50,6 @@ jobs:
       - name: Run Game Engine Tests
         working-directory: packages/game-engine
         run: bun run test:engine
-
-      - name: Production Build Test
-        run: bun run build
 
   # Job 2: Continuous Deployment to AWS EC2 (Runs on push to main)
   deploy:

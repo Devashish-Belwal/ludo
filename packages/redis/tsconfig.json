@@ -10,8 +10,14 @@
     "noEmit": false,
     "baseUrl": ".",
     "paths": {
-      "@ludo/shared": ["../../packages/shared/dist/index.d.ts"],
-      "@ludo/game-engine": ["../../packages/game-engine/dist/index.d.ts"]
+      "@ludo/shared": [
+        "../../packages/shared/src/index.ts",
+        "../../packages/shared/dist/index.d.ts"
+      ],
+      "@ludo/game-engine": [
+        "../../packages/game-engine/src/index.ts",
+        "../../packages/game-engine/dist/index.d.ts"
+      ]
     }
   },
   "include": ["src/**/*"]

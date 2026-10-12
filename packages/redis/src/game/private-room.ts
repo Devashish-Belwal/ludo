@@ -195,7 +195,7 @@ export async function startPrivateRoomGame(
     throw new Error("UNAUTHORIZED_NOT_HOST");
   }
 
-  const activePlayers = game.players.filter((p): p is GamePlayer => p !== null);
+  const activePlayers = game.players.filter((p: any): p is GamePlayer => p !== null);
   if (activePlayers.length < 2) {
     throw new Error("MINIMUM_PLAYERS_NOT_MET");
   }
@@ -270,7 +270,7 @@ export async function leaveWaitingRoom(
   }
 
   // Regular guest left
-  const slotIdx = game.players.findIndex((p) => p?.userId === userId);
+  const slotIdx = game.players.findIndex((p: any) => p?.userId === userId);
   if (slotIdx !== -1) {
     game.players[slotIdx] = null;
     game.version += 1;
