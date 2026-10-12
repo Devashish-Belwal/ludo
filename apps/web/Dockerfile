@@ -3,6 +3,7 @@
 # 1. Base stage
 FROM oven/bun:1.3.13 AS base
 WORKDIR /app
+ENV PATH="/app/node_modules/.bin:${PATH}"
 
 # 2. Dependencies stage
 FROM base AS deps
@@ -26,6 +27,7 @@ RUN bun install --frozen-lockfile
 # 3. Builder stage
 FROM base AS builder
 WORKDIR /app
+ENV PATH="/app/node_modules/.bin:${PATH}"
 
 # Copy dependencies and node_modules from deps stage
 COPY --from=deps /app/node_modules ./node_modules
@@ -40,12 +42,15 @@ COPY apps/web/ ./apps/web/
 
 # Generate Prisma Client for database queries
 ENV DATABASE_URL="postgresql://postgres:postgres@localhost:5432/ludo?schema=public"
-RUN cd packages/database && bun run prisma:generate
+RUN bunx prisma generate --schema=packages/database/prisma/schema.prisma
 
 # Build shared packages and production Next.js bundle
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN bun run build
+RUN bun --cwd packages/shared run build
+RUN bun --cwd packages/game-engine run build
+RUN bun --cwd packages/redis run build
+RUN bun --cwd apps/web run build
 
 # 4. Production Runner stage
 FROM base AS runner

@@ -3,6 +3,7 @@
 # 1. Base stage
 FROM oven/bun:1.3.13 AS base
 WORKDIR /app
+ENV PATH="/app/node_modules/.bin:${PATH}"
 
 # 2. Dependencies stage
 FROM base AS deps
