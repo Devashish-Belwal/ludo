@@ -11,7 +11,8 @@
     "test:redis": "bun --env-file=../../.env run src/__tests__/redis-test.ts",
     "test:rooms": "bun --env-file=../../.env run src/__tests__/rooms-test.ts",
     "test:matchmaking": "bun --env-file=../../.env run src/__tests__/matchmaking-test.ts",
-    "test:game": "bun --env-file=../../.env run src/__tests__/game-play-test.ts"
+    "test:game": "bun --env-file=../../.env run src/__tests__/game-play-test.ts",
+    "test:recovery": "bun --env-file=../../.env run src/__tests__/recovery-test.ts"
   },
   "dependencies": {
     "@ludo/shared": "workspace:*",

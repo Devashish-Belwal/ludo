@@ -206,6 +206,7 @@ export async function startPrivateRoomGame(
   await redis.set(RedisKeys.game(gameId), JSON.stringify(startedGame));
   await redis.persist(RedisKeys.game(gameId));
   await redis.persist(RedisKeys.gamePlayers(gameId));
+  await redis.sadd(RedisKeys.gamesActive(), gameId);
 
   // Publish GAME_STARTED to game room
   await publishGameEvent(redis, gameId, ServerEvents.GAME_STARTED, startedGame);

@@ -27,6 +27,7 @@ export const RedisKeys = {
   userActiveGame: (userId: string) => `user:active-game:${userId}`,
 
   // Active game state
+  gamesActive: () => `games:active`,
   game: (gameId: string) => `game:${gameId}`,
   gamePlayers: (gameId: string) => `game:players:${gameId}`,
   gameConnections: (gameId: string) => `game:connections:${gameId}`,

@@ -297,6 +297,7 @@ async function finalizeBatchCreation(
 
   // 5. Set active game mappings and player set
   await redis.sadd(RedisKeys.gamePlayers(gameId), ...userIds);
+  await redis.sadd(RedisKeys.gamesActive(), gameId);
   for (const uid of userIds) {
     await setUserActiveGame(redis, uid, gameId);
   }

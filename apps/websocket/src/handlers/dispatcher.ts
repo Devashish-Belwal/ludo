@@ -11,12 +11,14 @@ import {
   cancelMatchmakingQueue,
   handleRollDice,
   handleMoveToken,
+  getProcessedAction,
+  saveProcessedAction,
   type TokenKey,
 } from "@ludo/redis";
 
 /**
  * Handles incoming client messages over WebSocket.
- * Validates envelope with Zod and authorizes commands per user.
+ * Validates envelope with Zod, checks action idempotency, and authorizes commands per user.
  */
 export async function handleClientMessage(
   socket: AuthenticatedSocket,
@@ -46,7 +48,25 @@ export async function handleClientMessage(
 
   const { type, actionId, payload } = validation.data;
 
-  // 3. Dispatch commands
+  // 3. Idempotency Check per Section 16.4
+  // Deduplicates repeated requests for state-mutating actions
+  const mutatingCommands: string[] = [
+    ClientCommands.ROLL_DICE,
+    ClientCommands.MOVE_TOKEN,
+    ClientCommands.START_GAME,
+    ClientCommands.JOIN_MATCHMAKING,
+    ClientCommands.CANCEL_MATCHMAKING,
+  ];
+
+  if (mutatingCommands.includes(type)) {
+    const cached = await getProcessedAction(redis, socket.userId, actionId);
+    if (cached) {
+      sendServerMessage(socket, cached.commandType, cached.result, actionId);
+      return;
+    }
+  }
+
+  // 4. Dispatch commands
   switch (type) {
     case ClientCommands.PING: {
       socket.isAlive = true;
@@ -94,6 +114,7 @@ export async function handleClientMessage(
       }
       try {
         const game = await startPrivateRoomGame(redis, p.gameId, socket.userId);
+        await saveProcessedAction(redis, socket.userId, actionId, ServerEvents.GAME_STARTED, game);
         sendServerMessage(socket, ServerEvents.GAME_STARTED, game, actionId);
       } catch (err: any) {
         sendErrorMessage(socket, "START_GAME_ERROR", err.message || "Failed to start game", actionId);
@@ -121,10 +142,12 @@ export async function handleClientMessage(
       const username = p?.username || `Player_${socket.userId.slice(0, 6)}`;
       const result = await joinMatchmakingQueue(redis, socket.userId, username);
       if (result.success) {
+        const joinPayload = { userId: socket.userId, queueEntryTime: result.queueEntryTime };
+        await saveProcessedAction(redis, socket.userId, actionId, ServerEvents.MATCHMAKING_JOINED, joinPayload);
         sendServerMessage(
           socket,
           ServerEvents.MATCHMAKING_JOINED,
-          { userId: socket.userId, queueEntryTime: result.queueEntryTime },
+          joinPayload,
           actionId
         );
       } else {
@@ -143,10 +166,12 @@ export async function handleClientMessage(
     case ClientCommands.CANCEL_MATCHMAKING: {
       const result = await cancelMatchmakingQueue(redis, socket.userId);
       if (result.success) {
+        const cancelPayload = { userId: socket.userId };
+        await saveProcessedAction(redis, socket.userId, actionId, ServerEvents.MATCHMAKING_CANCELLED, cancelPayload);
         sendServerMessage(
           socket,
           ServerEvents.MATCHMAKING_CANCELLED,
-          { userId: socket.userId },
+          cancelPayload,
           actionId
         );
       } else {
@@ -169,6 +194,7 @@ export async function handleClientMessage(
 
       const res = await handleRollDice(redis, p.gameId, socket.userId);
       if (res.success && res.result) {
+        await saveProcessedAction(redis, socket.userId, actionId, ServerEvents.DICE_ROLLED, res.result);
         sendServerMessage(socket, ServerEvents.DICE_ROLLED, res.result, actionId);
       } else {
         sendErrorMessage(
@@ -190,6 +216,7 @@ export async function handleClientMessage(
 
       const res = await handleMoveToken(redis, p.gameId, socket.userId, p.tokenKey);
       if (res.success && res.result) {
+        await saveProcessedAction(redis, socket.userId, actionId, ServerEvents.TOKEN_MOVED, res.result);
         sendServerMessage(socket, ServerEvents.TOKEN_MOVED, res.result, actionId);
       } else {
         sendErrorMessage(

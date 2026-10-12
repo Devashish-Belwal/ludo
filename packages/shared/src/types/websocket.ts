@@ -66,9 +66,14 @@ export const ServerEvents = {
   TOKEN_MOVED: "TOKEN_MOVED",
   PLAYER_CAPTURED: "PLAYER_CAPTURED",
   TURN_CHANGED: "TURN_CHANGED",
+  TURN_TIMEOUT_WARNING: "TURN_TIMEOUT_WARNING",
+  TURN_SKIPPED: "TURN_SKIPPED",
   PLAYER_WON: "PLAYER_WON",
   GAME_COMPLETED: "GAME_COMPLETED",
   GAME_ABANDONED: "GAME_ABANDONED",
+  OPPONENT_DISCONNECTED: "OPPONENT_DISCONNECTED",
+  OPPONENT_RECONNECTED: "OPPONENT_RECONNECTED",
+  DEVICE_TAKEOVER: "DEVICE_TAKEOVER",
   MATCHMAKING_JOINED: "MATCHMAKING_JOINED",
   MATCHMAKING_FOUND: "MATCHMAKING_FOUND",
   MATCHMAKING_CANCELLED: "MATCHMAKING_CANCELLED",
@@ -77,3 +82,30 @@ export const ServerEvents = {
   INVITATION_UPDATED: "INVITATION_UPDATED",
   ERROR: "ERROR",
 } as const;
+
+export interface OpponentDisconnectedPayload {
+  gameId: string;
+  userId: string;
+  slot: number;
+  gracePeriodSeconds: number;
+  disconnectedAt: number;
+}
+
+export interface OpponentReconnectedPayload {
+  gameId: string;
+  userId: string;
+  slot: number;
+  reconnectedAt: number;
+}
+
+export interface TurnTimeoutWarningPayload {
+  gameId: string;
+  slot: number;
+  secondsRemaining: number;
+}
+
+export interface DeviceTakeoverPayload {
+  message: string;
+  newDeviceId: string;
+  timestamp: number;
+}

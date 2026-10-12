@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/badge";
-import { Crown, Trophy, Sparkles } from "lucide-react";
+import { Crown, Trophy, Sparkles, WifiOff } from "lucide-react";
 import type { GamePlayer, PlayerColor } from "@ludo/game-engine";
 
 interface PlayerCardProps {
@@ -7,6 +7,9 @@ interface PlayerCardProps {
   slotIndex: number;
   isCurrentTurn: boolean;
   isCurrentUser: boolean;
+  isDisconnected?: boolean;
+  disconnectSecondsRemaining?: number;
+  turnSecondsRemaining?: number;
 }
 
 const COLOR_CONFIG: Record<
@@ -66,6 +69,9 @@ export function PlayerCard({
   slotIndex,
   isCurrentTurn,
   isCurrentUser,
+  isDisconnected,
+  disconnectSecondsRemaining,
+  turnSecondsRemaining,
 }: PlayerCardProps) {
   const color = player?.color || DEFAULT_SLOT_COLORS[slotIndex];
   const theme = COLOR_CONFIG[color];
@@ -77,6 +83,8 @@ export function PlayerCard({
       if (t.type === "FINISHED") finishedCount++;
     }
   }
+
+  const isLowTime = turnSecondsRemaining !== undefined && turnSecondsRemaining <= 3;
 
   return (
     <div
@@ -92,11 +100,26 @@ export function PlayerCard({
           </span>
         </div>
 
-        {isCurrentTurn && (
-          <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/30 text-[10px] gap-1 py-0 animate-pulse">
-            <Sparkles className="w-2.5 h-2.5" /> Turn
-          </Badge>
-        )}
+        <div className="flex items-center gap-1.5">
+          {isDisconnected && (
+            <Badge className="bg-red-500/20 text-red-300 border-red-500/40 text-[10px] gap-1 py-0 animate-pulse">
+              <WifiOff className="w-2.5 h-2.5" /> Reconnecting ({disconnectSecondsRemaining ?? 60}s)
+            </Badge>
+          )}
+
+          {isCurrentTurn && !isDisconnected && (
+            <Badge
+              className={`text-[10px] gap-1 py-0 ${
+                isLowTime
+                  ? "bg-rose-500/30 text-rose-300 border-rose-500/50 animate-bounce"
+                  : "bg-amber-500/20 text-amber-300 border-amber-500/30 animate-pulse"
+              }`}
+            >
+              <Sparkles className="w-2.5 h-2.5" />
+              Turn {turnSecondsRemaining !== undefined ? `(${turnSecondsRemaining}s)` : ""}
+            </Badge>
+          )}
+        </div>
       </div>
 
       {player ? (
@@ -122,6 +145,18 @@ export function PlayerCard({
         </div>
       ) : (
         <div className="text-xs text-zinc-500 italic py-1">Empty Slot</div>
+      )}
+
+      {/* Turn Timer Progress Bar */}
+      {isCurrentTurn && turnSecondsRemaining !== undefined && !isDisconnected && (
+        <div className="mt-2.5 w-full bg-zinc-800/80 rounded-full h-1.5 overflow-hidden">
+          <div
+            className={`h-full transition-all duration-1000 ${
+              isLowTime ? "bg-rose-500" : "bg-amber-400"
+            }`}
+            style={{ width: `${Math.min(100, Math.max(0, (turnSecondsRemaining / 10) * 100))}%` }}
+          />
+        </div>
       )}
     </div>
   );

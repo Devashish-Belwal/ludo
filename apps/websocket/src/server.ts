@@ -11,9 +11,13 @@ import {
   registerConnection,
   removeConnection,
   MatchmakingWorker,
+  getUserActiveGame,
+  getGameState,
+  recordPlayerDisconnect,
+  clearPlayerDisconnect,
 } from "@ludo/redis";
 import { ServerEvents } from "@ludo/shared";
-
+import { GameRecoveryWorker } from "./recovery/worker";
 
 const PORT = parseInt(process.env.WS_PORT || "3001", 10);
 
@@ -45,6 +49,10 @@ async function bootstrap() {
   // Initialize and start single FIFO matchmaking worker per Section 10.5
   const matchmakingWorker = new MatchmakingWorker(redis, { intervalMs: 500 });
   await matchmakingWorker.start();
+
+  // Initialize and start periodic game recovery worker (turn timeouts & disconnect grace periods)
+  const recoveryWorker = new GameRecoveryWorker(redis, 1000);
+  recoveryWorker.start();
 
   // Upgrade HTTP to WebSocket with authentication ticket verification
   server.on("upgrade", async (request, socket, head) => {
@@ -84,6 +92,21 @@ async function bootstrap() {
 
   // Handle new authenticated connections
   wss.on("connection", async (socket: AuthenticatedSocket) => {
+    // 1. Device Takeover per Section 16.3:
+    // If user already has open sockets from a different deviceId, notify and close previous sockets
+    const existingSockets = registry.getUserConnections(socket.userId);
+    for (const existing of existingSockets) {
+      if (existing.deviceId !== socket.deviceId && existing.connectionId !== socket.connectionId) {
+        console.log(`[WebSocket] Device takeover: user=${socket.userId}, oldDevice=${existing.deviceId}, newDevice=${socket.deviceId}`);
+        sendServerMessage(existing, ServerEvents.DEVICE_TAKEOVER, {
+          message: "Session superseded by a new device connection",
+          newDeviceId: socket.deviceId,
+          timestamp: Date.now(),
+        });
+        existing.close(4001, "DEVICE_TAKEOVER");
+      }
+    }
+
     registry.add(socket);
 
     // Register connection in Redis & update presence
@@ -95,6 +118,25 @@ async function bootstrap() {
       connectionId: socket.connectionId,
       userId: socket.userId,
     });
+
+    // 2. Active Game Recovery / Reconnect within grace period:
+    try {
+      const activeGameId = await getUserActiveGame(redis, socket.userId);
+      if (activeGameId) {
+        registry.joinGame(activeGameId, socket.connectionId);
+        const reconnected = await clearPlayerDisconnect(redis, activeGameId, socket.userId);
+        if (reconnected) {
+          console.log(`[WebSocket] Player successfully reconnected within grace period: user=${socket.userId}, game=${activeGameId}`);
+        }
+        // Send state snapshot to reconnected player
+        const game = await getGameState(redis, activeGameId);
+        if (game) {
+          sendServerMessage(socket, ServerEvents.GAME_STATE, game);
+        }
+      }
+    } catch (err) {
+      console.error("[WebSocket] Error checking active game on connect:", err);
+    }
 
     // Ping-pong liveness check
     socket.on("pong", () => {
@@ -117,6 +159,25 @@ async function bootstrap() {
       registry.remove(socket.connectionId);
       const { remainingConnections } = await removeConnection(redis, socket.userId, socket.connectionId);
       console.log(`[WebSocket] Disconnected: user=${socket.userId}, conn=${socket.connectionId}, remaining=${remainingConnections}`);
+
+      // If user has zero active connections remaining and is in an active game, initiate disconnect grace period
+      if (remainingConnections === 0) {
+        try {
+          const activeGameId = await getUserActiveGame(redis, socket.userId);
+          if (activeGameId) {
+            const game = await getGameState(redis, activeGameId);
+            if (game && game.status === "IN_PROGRESS") {
+              const slot = game.players.findIndex((p) => p !== null && p.userId === socket.userId);
+              if (slot !== -1) {
+                await recordPlayerDisconnect(redis, activeGameId, socket.userId, slot);
+                console.log(`[WebSocket] Disconnect grace period (60s) initiated for user=${socket.userId} in game=${activeGameId} (slot=${slot})`);
+              }
+            }
+          }
+        } catch (err) {
+          console.error("[WebSocket] Error initiating disconnect grace period:", err);
+        }
+      }
     });
 
     socket.on("error", (err) => {
@@ -136,6 +197,21 @@ async function bootstrap() {
       socket.ping();
     }
   }, 15000);
+
+  const shutdown = async () => {
+    console.log("[WebSocket] Shutting down services...");
+    matchmakingWorker.stop();
+    recoveryWorker.stop();
+    clearInterval(heartbeatInterval);
+    wss.close();
+    server.close();
+    await redis.quit();
+    await redisSubscriber.quit();
+    process.exit(0);
+  };
+
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
 
   wss.on("close", () => {
     clearInterval(heartbeatInterval);

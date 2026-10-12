@@ -10,4 +10,5 @@ export * from "./invitations";
 export * from "./game/private-room";
 export * from "./matchmaking";
 export * from "./game/play-game";
+export * from "./game/recovery";
 export type { TokenKey } from "@ludo/game-engine";

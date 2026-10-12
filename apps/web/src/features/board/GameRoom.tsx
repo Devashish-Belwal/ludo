@@ -40,6 +40,11 @@ export function GameRoom({ gameId, currentUserId, onLeave }: GameRoomProps) {
   const [isLeaving, setIsLeaving] = useState(false);
   const [isActing, setIsActing] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
+  const [disconnectedPlayers, setDisconnectedPlayers] = useState<
+    Record<string, { disconnectedAt: number; gracePeriodSeconds: number }>
+  >({});
+  const [deviceTakeover, setDeviceTakeover] = useState<string | null>(null);
+  const [now, setNow] = useState<number>(0);
 
   // 1. Fetch Game State
   const fetchState = useCallback(async () => {
@@ -58,7 +63,21 @@ export function GameRoom({ gameId, currentUserId, onLeave }: GameRoomProps) {
     }
   }, [gameId]);
 
-  // Initial load and fallback polling every 1 second
+  // 1-second interval timer for turn countdown & disconnect grace periods
+  useEffect(() => {
+    const initialTimer = setTimeout(() => {
+      setNow(Date.now());
+    }, 0);
+    const timer = setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(timer);
+    };
+  }, []);
+
+  // Initial load and fallback polling every 1.2 seconds
   useEffect(() => {
     let isMounted = true;
 
@@ -129,10 +148,40 @@ export function GameRoom({ gameId, currentUserId, onLeave }: GameRoomProps) {
             const data = JSON.parse(event.data);
             if (data.type === "GAME_STATE" && data.payload) {
               setGameState(data.payload as GameState);
+            } else if (data.type === "OPPONENT_DISCONNECTED" && data.payload) {
+              const p = data.payload as {
+                userId: string;
+                disconnectedAt: number;
+                gracePeriodSeconds: number;
+              };
+              setDisconnectedPlayers((prev) => ({
+                ...prev,
+                [p.userId]: {
+                  disconnectedAt: p.disconnectedAt,
+                  gracePeriodSeconds: p.gracePeriodSeconds,
+                },
+              }));
+            } else if (data.type === "OPPONENT_RECONNECTED" && data.payload) {
+              const p = data.payload as { userId: string };
+              setDisconnectedPlayers((prev) => {
+                const next = { ...prev };
+                delete next[p.userId];
+                return next;
+              });
+            } else if (data.type === "DEVICE_TAKEOVER") {
+              setDeviceTakeover(
+                data.payload?.message || "Session superseded by a new device connection"
+              );
             } else if (
-              ["DICE_ROLLED", "TOKEN_MOVED", "TURN_CHANGED", "PLAYER_CAPTURED", "PLAYER_WON"].includes(
-                data.type
-              )
+              [
+                "DICE_ROLLED",
+                "TOKEN_MOVED",
+                "TURN_CHANGED",
+                "TURN_SKIPPED",
+                "PLAYER_CAPTURED",
+                "PLAYER_WON",
+                "GAME_PLAYER_LEFT",
+              ].includes(data.type)
             ) {
               fetchState();
             }
@@ -230,6 +279,22 @@ export function GameRoom({ gameId, currentUserId, onLeave }: GameRoomProps) {
     }
   };
 
+  // Turn & Disconnect Timer calculations (unconditional hooks)
+  const turnSecondsRemaining = useMemo(() => {
+    if (!gameState || gameState.status !== "IN_PROGRESS" || gameState.currentTurn === null || !now) return 10;
+    const turnStartedAt = gameState.turnStartedAt || gameState.lastActivityAt;
+    const elapsedSeconds = Math.floor((now - turnStartedAt) / 1000);
+    return Math.max(0, 10 - elapsedSeconds);
+  }, [gameState, now]);
+
+  const getDisconnectRemaining = useCallback((userId?: string) => {
+    if (!userId || !now) return undefined;
+    const record = disconnectedPlayers[userId];
+    if (!record) return undefined;
+    const elapsed = Math.floor((now - record.disconnectedAt) / 1000);
+    return Math.max(0, record.gracePeriodSeconds - elapsed);
+  }, [disconnectedPlayers, now]);
+
   if (loading || !gameState) {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-3 text-zinc-400">
@@ -252,7 +317,28 @@ export function GameRoom({ gameId, currentUserId, onLeave }: GameRoomProps) {
   );
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto pb-12">
+    <div className="space-y-6 max-w-5xl mx-auto pb-12 relative">
+      {/* Device Takeover Modal */}
+      {deviceTakeover && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in">
+          <div className="bg-zinc-900 border border-amber-500/50 rounded-2xl max-w-md w-full p-6 text-center shadow-2xl">
+            <div className="w-12 h-12 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <h3 className="text-lg font-bold text-zinc-100 mb-2">Device Takeover</h3>
+            <p className="text-sm text-zinc-400 mb-6">
+              {deviceTakeover}
+            </p>
+            <Button
+              onClick={handleLeaveGame}
+              className="w-full bg-amber-500 hover:bg-amber-600 text-zinc-950 font-bold"
+            >
+              Return to Dashboard
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Top Header Bar */}
       <div className="bg-zinc-950/80 border border-zinc-800 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl backdrop-blur-md">
         <div className="flex items-center gap-3">
@@ -311,12 +397,18 @@ export function GameRoom({ gameId, currentUserId, onLeave }: GameRoomProps) {
             slotIndex={0}
             isCurrentTurn={currentSlot === 0}
             isCurrentUser={gameState.players[0]?.userId === currentUserId}
+            isDisconnected={!!gameState.players[0] && !!disconnectedPlayers[gameState.players[0].userId]}
+            disconnectSecondsRemaining={getDisconnectRemaining(gameState.players[0]?.userId)}
+            turnSecondsRemaining={currentSlot === 0 ? turnSecondsRemaining : undefined}
           />
           <PlayerCard
             player={gameState.players[3]}
             slotIndex={3}
             isCurrentTurn={currentSlot === 3}
             isCurrentUser={gameState.players[3]?.userId === currentUserId}
+            isDisconnected={!!gameState.players[3] && !!disconnectedPlayers[gameState.players[3].userId]}
+            disconnectSecondsRemaining={getDisconnectRemaining(gameState.players[3]?.userId)}
+            turnSecondsRemaining={currentSlot === 3 ? turnSecondsRemaining : undefined}
           />
         </div>
 
@@ -352,12 +444,18 @@ export function GameRoom({ gameId, currentUserId, onLeave }: GameRoomProps) {
             slotIndex={1}
             isCurrentTurn={currentSlot === 1}
             isCurrentUser={gameState.players[1]?.userId === currentUserId}
+            isDisconnected={!!gameState.players[1] && !!disconnectedPlayers[gameState.players[1].userId]}
+            disconnectSecondsRemaining={getDisconnectRemaining(gameState.players[1]?.userId)}
+            turnSecondsRemaining={currentSlot === 1 ? turnSecondsRemaining : undefined}
           />
           <PlayerCard
             player={gameState.players[2]}
             slotIndex={2}
             isCurrentTurn={currentSlot === 2}
             isCurrentUser={gameState.players[2]?.userId === currentUserId}
+            isDisconnected={!!gameState.players[2] && !!disconnectedPlayers[gameState.players[2].userId]}
+            disconnectSecondsRemaining={getDisconnectRemaining(gameState.players[2]?.userId)}
+            turnSecondsRemaining={currentSlot === 2 ? turnSecondsRemaining : undefined}
           />
         </div>
       </div>
