@@ -40,7 +40,7 @@ COPY apps/web/ ./apps/web/
 
 # Generate Prisma Client for database queries
 ENV DATABASE_URL="postgresql://postgres:postgres@localhost:5432/ludo?schema=public"
-RUN bun --cwd packages/database run prisma:generate
+RUN cd packages/database && bun run prisma:generate
 
 # Build shared packages and production Next.js bundle
 ENV NODE_ENV=production
