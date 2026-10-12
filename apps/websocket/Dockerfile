@@ -20,19 +20,12 @@ COPY packages/redis/package.json ./packages/redis/
 COPY apps/web/package.json ./apps/web/
 COPY apps/websocket/package.json ./apps/websocket/
 
-# Install dependencies
+# Install dependencies (installs root and nested workspace node_modules)
 RUN bun install --frozen-lockfile
 
-# 3. Builder stage
-FROM base AS builder
+# 3. Builder stage (inherits all installed dependencies & CLI tools)
+FROM deps AS builder
 WORKDIR /app
-
-# Copy dependencies from deps stage
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/package.json ./package.json
-COPY --from=deps /app/bun.lock ./bun.lock
-COPY --from=deps /app/turbo.json ./turbo.json
-COPY --from=deps /app/tsconfig.base.json ./tsconfig.base.json
 
 # Copy source packages needed by websocket service
 COPY packages/ ./packages/
@@ -51,10 +44,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV WS_PORT=3001
 
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/packages ./packages
-COPY --from=builder /app/apps/websocket ./apps/websocket
+# Copy all built artifacts and workspace dependencies
+COPY --from=builder /app ./
 
 EXPOSE 3001
 
