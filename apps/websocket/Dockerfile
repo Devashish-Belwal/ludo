@@ -60,4 +60,4 @@ COPY --from=builder /app/apps/websocket ./apps/websocket
 EXPOSE 3001
 
 # Start WebSocket server
-CMD ["bun", "run", "apps/websocket/dist/server.js"]
+CMD ["bun", "run", "apps/websocket/src/server.ts"]

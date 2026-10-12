@@ -68,7 +68,8 @@ COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/packages ./packages
 COPY --from=builder /app/apps/web ./apps/web
 
+WORKDIR /app/apps/web
 EXPOSE 3000
 
 # Start Next.js production server
-CMD ["bun", "--cwd", "apps/web", "run", "start"]
+CMD ["bun", "run", "start"]
