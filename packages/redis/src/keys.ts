@@ -32,6 +32,7 @@ export const RedisKeys = {
   gamePlayers: (gameId: string) => `game:players:${gameId}`,
   gameConnections: (gameId: string) => `game:connections:${gameId}`,
   gameDisconnect: (gameId: string) => `game:disconnect:${gameId}`,
+  gameTimeouts: (gameId: string) => `game:timeouts:${gameId}`,
 
   // Public Matchmaking
   matchmakingQueue: () => `matchmaking:public`,
@@ -60,10 +61,12 @@ export const RedisChannels = {
  * Key Expiration Policies per Section 10.3 & 15.1
  */
 export const RedisTTL = {
-  PRESENCE: 45,            // 45 seconds, refreshed every 15s heartbeat
-  INVITATION: 300,         // 5 minutes
-  WAITING_ROOM: 180,       // 3 minutes
-  IDEMPOTENCY_ACTION: 600, // 10 minutes
-  TURN_SKIP: 10,           // 10 seconds turn skip deadline
-  DISCONNECT_REMOVAL: 60,  // 60 seconds removal deadline
+  PRESENCE: 45,                  // 45 seconds, refreshed every 15s heartbeat
+  INVITATION: 300,               // 5 minutes
+  WAITING_ROOM: 180,             // 3 minutes
+  IDEMPOTENCY_ACTION: 600,       // 10 minutes
+  TURN_SKIP: 10,                 // 10 seconds turn skip deadline
+  DISCONNECT_REMOVAL: 60,        // 60 seconds removal deadline
+  GAME_INACTIVITY: 300,          // 5 minutes of zero activity closes match
+  MAX_CONSECUTIVE_TIMEOUTS: 3,   // 3 consecutive missed turns forfeits player
 } as const;

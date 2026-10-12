@@ -7,6 +7,7 @@ import {
   handleMoveToken,
   leaveActiveGame,
   getAuthoritativeGameState,
+  checkTurnTimeout,
   type TokenKey,
 } from "@ludo/redis";
 import type { GameState, RollDiceResult, MoveTokenResult } from "@ludo/game-engine";
@@ -87,9 +88,17 @@ export async function getGameStateAction(
   }
 
   try {
-    const game = await getAuthoritativeGameState(redis, gameId);
+    let game = await getAuthoritativeGameState(redis, gameId);
     if (!game) {
       return { success: false, error: "Game not found" };
+    }
+
+    // Lazy timeout resolution for active games
+    if (game.status === "IN_PROGRESS") {
+      const timeoutRes = await checkTurnTimeout(redis, gameId);
+      if (timeoutRes.updatedGame) {
+        game = timeoutRes.updatedGame;
+      }
     }
 
     return {

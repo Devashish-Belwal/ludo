@@ -167,11 +167,84 @@ async function runMilestone11Tests() {
     if (isActiveGameStill) throw new Error("Completed game should be removed from games:active");
     console.log("✓ Completed game cleanly cleaned up from games:active set.");
 
-    console.log("\n ALL 9 MILESTONE 11 TESTS PASSED SUCCESSFULLY! \n");
+    // 10. Consecutive AFK Strikes (3 Strikes = Auto-Forfeit)
+    console.log("\n10. Testing consecutive AFK strikes (3 strikes auto-forfeit)...");
+    const afkGameId = `test-afk-${Date.now()}`;
+    const afkGame = createGame(
+      afkGameId,
+      [
+        { userId: "afk-u1", username: "AfkPlayer1" },
+        { userId: "afk-u2", username: "ActivePlayer2" },
+      ],
+      { status: "IN_PROGRESS" }
+    );
+    afkGame.currentTurn = 0;
+    afkGame.turnStartedAt = Date.now() - 11000;
+
+    await testRedis.set(RedisKeys.game(afkGameId), JSON.stringify(afkGame));
+    await testRedis.sadd(RedisKeys.gamesActive(), afkGameId);
+    await testRedis.sadd(RedisKeys.gamePlayers(afkGameId), "afk-u1", "afk-u2");
+
+    // Strike 1 for slot 0
+    const afkRes1 = await checkTurnTimeout(testRedis, afkGameId);
+    if (!afkRes1.timedOut) throw new Error("Expected strike 1 timeout");
+    const strike1Count = await testRedis.hget(RedisKeys.gameTimeouts(afkGameId), "0");
+    if (strike1Count !== "1") throw new Error(`Expected strike count 1, got ${strike1Count}`);
+
+    // Set slot 0 turn again 11s ago -> Strike 2
+    const afkGame2 = { ...afkRes1.updatedGame!, currentTurn: 0, turnStartedAt: Date.now() - 11000 };
+    await testRedis.set(RedisKeys.game(afkGameId), JSON.stringify(afkGame2));
+    const afkRes2 = await checkTurnTimeout(testRedis, afkGameId);
+    if (!afkRes2.timedOut) throw new Error("Expected strike 2 timeout");
+    const strike2Count = await testRedis.hget(RedisKeys.gameTimeouts(afkGameId), "0");
+    if (strike2Count !== "2") throw new Error(`Expected strike count 2, got ${strike2Count}`);
+
+    // Set slot 0 turn again 11s ago -> Strike 3 (Forfeit!)
+    const afkGame3 = { ...afkRes2.updatedGame!, currentTurn: 0, turnStartedAt: Date.now() - 11000 };
+    await testRedis.set(RedisKeys.game(afkGameId), JSON.stringify(afkGame3));
+    const afkRes3 = await checkTurnTimeout(testRedis, afkGameId);
+    if (!afkRes3.timedOut) throw new Error("Expected strike 3 timeout");
+    if (afkRes3.updatedGame?.status !== "COMPLETED") {
+      throw new Error(`Expected game COMPLETED after 3 AFK strikes, got ${afkRes3.updatedGame?.status}`);
+    }
+    if (afkRes3.updatedGame?.winnerUserId !== "afk-u2") {
+      throw new Error(`Expected active opponent to win, got ${afkRes3.updatedGame?.winnerUserId}`);
+    }
+    console.log("✓ 3 consecutive AFK strikes triggered authoritative forfeit victory for opponent!");
+
+    // 11. 5-Minute Game Inactivity Auto-Abandonment
+    console.log("\n11. Testing 5-minute total game inactivity auto-abandonment...");
+    const idleGameId = `test-idle-${Date.now()}`;
+    const idleGame = createGame(
+      idleGameId,
+      [
+        { userId: "idle-u1", username: "IdlePlayer1" },
+        { userId: "idle-u2", username: "IdlePlayer2" },
+      ],
+      { status: "IN_PROGRESS" }
+    );
+    idleGame.lastActivityAt = Date.now() - 305000; // 5 minutes and 5 seconds ago
+    idleGame.turnStartedAt = Date.now() - 305000;
+
+    await testRedis.set(RedisKeys.game(idleGameId), JSON.stringify(idleGame));
+    await testRedis.sadd(RedisKeys.gamesActive(), idleGameId);
+    await testRedis.sadd(RedisKeys.gamePlayers(idleGameId), "idle-u1", "idle-u2");
+
+    const idleRes = await checkTurnTimeout(testRedis, idleGameId);
+    if (!idleRes.timedOut) throw new Error("Expected idle game timeout");
+    if (idleRes.updatedGame?.status !== "ABANDONED") {
+      throw new Error(`Expected game ABANDONED after 5 minutes inactivity, got ${idleRes.updatedGame?.status}`);
+    }
+    const idleStillActive = await testRedis.sismember(RedisKeys.gamesActive(), idleGameId);
+    if (idleStillActive) throw new Error("Idle abandoned game should be removed from games:active");
+    console.log("✓ 5 minutes of total game inactivity successfully auto-abandoned match and freed player reservations!");
+
+    console.log("\n ALL 11 MILESTONE 11 TESTS PASSED SUCCESSFULLY! \n");
   } finally {
     // Teardown test keys
     await testRedis.del(RedisKeys.game(gameId));
     await testRedis.del(RedisKeys.gameDisconnect(gameId));
+    await testRedis.del(RedisKeys.gameTimeouts(gameId));
     await testRedis.srem(RedisKeys.gamesActive(), gameId);
     await testRedis.quit();
   }

@@ -247,9 +247,45 @@ export async function checkTurnTimeout(
 
   const turnStartedAt = game.turnStartedAt || game.lastActivityAt;
   const now = Date.now();
+
+  // 1. Overall game inactivity timeout (5 minutes / 300s of zero manual player interaction)
+  const gameInactivityMs = now - (game.lastActivityAt || game.createdAt);
+  if (gameInactivityMs >= RedisTTL.GAME_INACTIVITY * 1000) {
+    const abandonedGame: GameState = {
+      ...game,
+      status: "ABANDONED",
+      currentTurn: null,
+      diceValue: null,
+      consecutiveSixes: 0,
+      version: game.version + 1,
+      lastActivityAt: now,
+    };
+
+    await redis.set(RedisKeys.game(gameId), JSON.stringify(abandonedGame));
+    await redis.srem(RedisKeys.gamesActive(), gameId);
+    await redis.del(RedisKeys.gameTimeouts(gameId));
+
+    // Clear active mappings for all players so they are not trapped in a dead game
+    for (const p of game.players) {
+      if (p) {
+        await removeUserActiveGame(redis, p.userId);
+        await redis.srem(RedisKeys.gamePlayers(gameId), p.userId);
+      }
+    }
+
+    await publishGameEvent(redis, gameId, ServerEvents.GAME_ABANDONED, {
+      gameId,
+      reason: "INACTIVITY_TIMEOUT",
+      version: abandonedGame.version,
+    });
+    await publishGameEvent(redis, gameId, ServerEvents.GAME_STATE, abandonedGame);
+
+    return { timedOut: true, warningSent: false, updatedGame: abandonedGame };
+  }
+
   const elapsedMs = now - turnStartedAt;
 
-  // 1. Send warning at 7 seconds (3 seconds remaining)
+  // 2. Send warning at 7 seconds (3 seconds remaining)
   if (elapsedMs >= 7000 && elapsedMs < 10000) {
     const warnKey = `game:timeout_warn:${gameId}:${game.currentTurn}:${game.version}`;
     const alreadyWarned = await redis.get(warnKey);
@@ -270,50 +306,117 @@ export async function checkTurnTimeout(
     return { timedOut: false, warningSent: false, updatedGame: game };
   }
 
-  // 2. Full 10-second turn timeout
+  // 3. Full 10-second turn timeout with AFK Strike System
   if (elapsedMs >= 10000) {
     const previousTurn = game.currentTurn;
-    let nextGame: GameState;
+    const timeoutsKey = RedisKeys.gameTimeouts(gameId);
+    const strikes = await redis.hincrby(timeoutsKey, previousTurn.toString(), 1);
+    await redis.expire(timeoutsKey, 3600);
 
-    if (game.turnPhase === "WAITING_FOR_ROLL") {
-      // Player failed to roll in 10s: pass turn to next active player
-      nextGame = advanceTurn(game);
-    } else {
-      // Player rolled but failed to move token in 10s: auto-move first legal token or advance
+    let nextGame: GameState;
+    let playerRemoved = false;
+
+    if (strikes >= RedisTTL.MAX_CONSECUTIVE_TIMEOUTS) {
+      // Player missed 3 consecutive turns without acting! Auto-forfeit / remove player.
       const activePlayer = game.players[previousTurn];
-      if (activePlayer && game.diceValue !== null) {
-        const legalMoves = calculateLegalMoves(activePlayer, previousTurn, game.diceValue);
-        if (legalMoves.length > 0) {
-          const moveResult = moveToken(game, legalMoves[0]);
-          nextGame = moveResult.nextState;
-        } else {
-          nextGame = advanceTurn(game);
+      if (activePlayer) {
+        playerRemoved = true;
+        await removeUserActiveGame(redis, activePlayer.userId);
+        await redis.srem(RedisKeys.gamePlayers(gameId), activePlayer.userId);
+        await redis.hdel(timeoutsKey, previousTurn.toString());
+
+        nextGame = removePlayer(game, previousTurn);
+        // Preserve lastActivityAt so inactivity timer measures real human actions
+        nextGame = { ...nextGame, lastActivityAt: game.lastActivityAt };
+
+        // Broadcast player left due to AFK
+        await publishGameEvent(redis, gameId, ServerEvents.GAME_PLAYER_LEFT, {
+          gameId,
+          userId: activePlayer.userId,
+          slot: previousTurn,
+          reason: "AFK_TIMEOUT",
+        });
+
+        // Check if this caused game completion or abandonment
+        if (nextGame.status === "COMPLETED") {
+          await publishGameEvent(redis, gameId, ServerEvents.PLAYER_WON, {
+            gameId,
+            winnerSlot: nextGame.winningSlot,
+            winnerUserId: nextGame.winnerUserId,
+            reason: "OPPONENTS_FORFEIT",
+            version: nextGame.version,
+          });
+
+          await publishGameEvent(redis, gameId, ServerEvents.GAME_COMPLETED, {
+            gameId,
+            winnerSlot: nextGame.winningSlot,
+            winnerUserId: nextGame.winnerUserId,
+            reason: "OPPONENTS_FORFEIT",
+            version: nextGame.version,
+          });
+
+          await redis.srem(RedisKeys.gamesActive(), gameId);
+          await redis.del(timeoutsKey);
+        } else if (nextGame.status === "ABANDONED") {
+          await publishGameEvent(redis, gameId, ServerEvents.GAME_ABANDONED, {
+            gameId,
+            reason: "ALL_PLAYERS_AFK",
+            version: nextGame.version,
+          });
+
+          await redis.srem(RedisKeys.gamesActive(), gameId);
+          await redis.del(timeoutsKey);
         }
       } else {
         nextGame = advanceTurn(game);
+        nextGame = { ...nextGame, lastActivityAt: game.lastActivityAt };
+      }
+    } else {
+      // Normal turn timeout (strikes < 3)
+      if (game.turnPhase === "WAITING_FOR_ROLL") {
+        nextGame = advanceTurn(game);
+        nextGame = { ...nextGame, lastActivityAt: game.lastActivityAt };
+      } else {
+        const activePlayer = game.players[previousTurn];
+        if (activePlayer && game.diceValue !== null) {
+          const legalMoves = calculateLegalMoves(activePlayer, previousTurn, game.diceValue);
+          if (legalMoves.length > 0) {
+            const moveResult = moveToken(game, legalMoves[0]);
+            nextGame = moveResult.nextState;
+            nextGame = { ...nextGame, lastActivityAt: game.lastActivityAt };
+          } else {
+            nextGame = advanceTurn(game);
+            nextGame = { ...nextGame, lastActivityAt: game.lastActivityAt };
+          }
+        } else {
+          nextGame = advanceTurn(game);
+          nextGame = { ...nextGame, lastActivityAt: game.lastActivityAt };
+        }
       }
     }
 
     // Persist state in Redis
     await redis.set(RedisKeys.game(gameId), JSON.stringify(nextGame));
 
-    // Broadcast TURN_SKIPPED event
-    await publishGameEvent(redis, gameId, ServerEvents.TURN_SKIPPED, {
-      gameId,
-      slot: previousTurn,
-      nextTurn: nextGame.currentTurn,
-      reason: "TURN_TIMEOUT",
-      version: nextGame.version,
-    });
-
-    // Broadcast TURN_CHANGED if turn changed
-    if (nextGame.currentTurn !== previousTurn) {
-      await publishGameEvent(redis, gameId, ServerEvents.TURN_CHANGED, {
+    if (!playerRemoved) {
+      // Broadcast TURN_SKIPPED event
+      await publishGameEvent(redis, gameId, ServerEvents.TURN_SKIPPED, {
         gameId,
-        previousTurn,
-        currentTurn: nextGame.currentTurn,
+        slot: previousTurn,
+        nextTurn: nextGame.currentTurn,
+        reason: "TURN_TIMEOUT",
         version: nextGame.version,
       });
+
+      // Broadcast TURN_CHANGED if turn changed
+      if (nextGame.currentTurn !== previousTurn && nextGame.currentTurn !== null) {
+        await publishGameEvent(redis, gameId, ServerEvents.TURN_CHANGED, {
+          gameId,
+          previousTurn,
+          currentTurn: nextGame.currentTurn,
+          version: nextGame.version,
+        });
+      }
     }
 
     // Broadcast full updated state snapshot

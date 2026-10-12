@@ -74,6 +74,9 @@ export async function handleRollDice(
     // Persist updated game state in Redis
     await redis.set(RedisKeys.game(gameId), JSON.stringify(updatedGame));
 
+    // Reset AFK consecutive timeout strikes for current player
+    await redis.hdel(RedisKeys.gameTimeouts(gameId), game.currentTurn.toString());
+
     // Publish DICE_ROLLED event to all players in the room
     await publishGameEvent(redis, gameId, ServerEvents.DICE_ROLLED, {
       gameId,
@@ -144,6 +147,9 @@ export async function handleMoveToken(
 
     // Persist updated game state in Redis
     await redis.set(RedisKeys.game(gameId), JSON.stringify(updatedGame));
+
+    // Reset AFK consecutive timeout strikes for current player
+    await redis.hdel(RedisKeys.gameTimeouts(gameId), game.currentTurn.toString());
 
     // Publish TOKEN_MOVED event
     await publishGameEvent(redis, gameId, ServerEvents.TOKEN_MOVED, {
