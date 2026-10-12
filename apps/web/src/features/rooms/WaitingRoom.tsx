@@ -17,6 +17,8 @@ import {
   Crown,
   Loader2,
   AlertTriangle,
+  CheckCircle2,
+  Swords,
 } from "lucide-react";
 
 interface WaitingRoomProps {
@@ -146,6 +148,7 @@ export function WaitingRoom({
     );
   }
 
+  const isGameInProgress = room.status === "IN_PROGRESS";
   const isHost = room.hostId === currentUserId;
   const activeCount = room.players.filter((p) => p !== null).length;
   const canStart = isHost && activeCount >= 2;
@@ -160,22 +163,37 @@ export function WaitingRoom({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-zinc-800/80 gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 uppercase tracking-wider">
-              Private Waiting Room
+            <span
+              className={`text-xs font-semibold px-2 py-0.5 rounded uppercase tracking-wider ${
+                isGameInProgress
+                  ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                  : "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20"
+              }`}
+            >
+              {isGameInProgress ? "Match In Progress" : "Private Waiting Room"}
             </span>
             <Badge variant="outline" className="text-zinc-400 border-zinc-700">
               {activeCount}/4 Players
             </Badge>
           </div>
-          <h2 className="text-2xl font-bold text-zinc-100 mt-1">Ludo Match Lobby</h2>
+          <h2 className="text-2xl font-bold text-zinc-100 mt-1">
+            {isGameInProgress ? "4-Player Ludo Match" : "Ludo Match Lobby"}
+          </h2>
         </div>
 
-        {/* Timer */}
-        <div className="flex items-center gap-2 bg-zinc-900/80 border border-zinc-800 px-3 py-1.5 rounded-lg text-sm text-zinc-300">
-          <Clock className="w-4 h-4 text-amber-400" />
-          <span>Expires in:</span>
-          <span className="font-mono font-bold text-amber-400">{formattedTime}</span>
-        </div>
+        {/* Live Indicator or Expiry Timer */}
+        {isGameInProgress ? (
+          <div className="flex items-center gap-2 bg-emerald-950/60 border border-emerald-800/60 px-3 py-1.5 rounded-lg text-sm text-emerald-300">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="font-semibold">Game Live</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 bg-zinc-900/80 border border-zinc-800 px-3 py-1.5 rounded-lg text-sm text-zinc-300">
+            <Clock className="w-4 h-4 text-amber-400" />
+            <span>Expires in:</span>
+            <span className="font-mono font-bold text-amber-400">{formattedTime}</span>
+          </div>
+        )}
       </div>
 
       {error && (
@@ -222,7 +240,9 @@ export function WaitingRoom({
                       <span className="text-xs text-zinc-400 font-normal">(You)</span>
                     )}
                   </div>
-                  <Badge className={style.badge}>Ready</Badge>
+                  <Badge className={style.badge}>
+                    {isGameInProgress ? "Playing" : "Ready"}
+                  </Badge>
                 </div>
               ) : (
                 <div className="mt-3 text-sm text-zinc-500 italic flex items-center gap-1.5">
@@ -234,6 +254,21 @@ export function WaitingRoom({
           );
         })}
       </div>
+
+      {/* In-progress banner preview for Milestone 10 */}
+      {isGameInProgress && (
+        <div className="mb-6 p-4 rounded-xl bg-indigo-950/40 border border-indigo-800/40 text-sm text-indigo-300 flex items-center justify-between gap-3 shadow-inner">
+          <div className="flex items-center gap-2.5">
+            <Swords className="w-5 h-5 text-indigo-400 shrink-0" />
+            <span>
+              All 4 players connected and seated. Server-authoritative game state is live in Redis.
+            </span>
+          </div>
+          <Badge className="bg-indigo-500/20 text-indigo-300 border-indigo-500/30 shrink-0">
+            IN_PROGRESS
+          </Badge>
+        </div>
+      )}
 
       {/* Actions */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-zinc-800/80">
@@ -248,10 +283,15 @@ export function WaitingRoom({
           ) : (
             <LogOut className="w-4 h-4 mr-2" />
           )}
-          Leave Room
+          {isGameInProgress ? "Leave Game" : "Leave Room"}
         </Button>
 
-        {isHost ? (
+        {isGameInProgress ? (
+          <div className="text-sm text-emerald-400 flex items-center gap-2 font-medium">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            <span>Match is Active • Ready for Milestone 10 Board UI</span>
+          </div>
+        ) : isHost ? (
           <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
             {!canStart && (
               <span className="text-xs text-zinc-400 italic">

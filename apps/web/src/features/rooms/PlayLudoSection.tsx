@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { CreateRoomModal } from "./CreateRoomModal";
 import { WaitingRoom } from "./WaitingRoom";
 import { InvitationsBanner } from "./InvitationsBanner";
 import { MatchmakingModal } from "@/features/matchmaking/MatchmakingModal";
+import { getMatchmakingStatusAction } from "@/actions/matchmaking";
 import { Users, Swords } from "lucide-react";
 
 interface PlayLudoSectionProps {
@@ -19,6 +20,22 @@ export function PlayLudoSection({
   const [activeGameId, setActiveGameId] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isMatchmakingOpen, setIsMatchmakingOpen] = useState(false);
+
+  // Auto-recover active game mapping on load per Section 14.4
+  useEffect(() => {
+    let isMounted = true;
+    getMatchmakingStatusAction()
+      .then((res) => {
+        if (!isMounted) return;
+        if (res.success && res.data?.inGame && res.data.gameId) {
+          setActiveGameId(res.data.gameId);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // If currently in a waiting room, render the WaitingRoom lobby
   if (activeGameId) {

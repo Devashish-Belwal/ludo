@@ -1,11 +1,13 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { prisma } from "@ludo/database";
 import {
   redis,
   joinMatchmakingQueue,
   cancelMatchmakingQueue,
   getMatchmakingStatus,
+  processMatchmakingBatch,
   type MatchmakingStatusResult,
 } from "@ludo/redis";
 
@@ -13,6 +15,15 @@ export interface MatchmakingActionResult<T = unknown> {
   success: boolean;
   data?: T;
   error?: string;
+}
+
+// Helper to look up usernames from PostgreSQL during batch creation
+async function lookupUsernamesFromDb(userIds: string[]): Promise<Map<string, string>> {
+  const users = await prisma.user.findMany({
+    where: { id: { in: userIds } },
+    select: { id: true, username: true },
+  });
+  return new Map(users.map((u) => [u.id, u.username || `Player_${u.id.slice(0, 4)}`]));
 }
 
 /**
@@ -28,7 +39,16 @@ export async function joinMatchmakingAction(): Promise<
   }
 
   const userId = session.user.id;
-  const username = session.user.username;
+  let username = session.user.username;
+
+  // Authoritative check against PostgreSQL in case session token is not yet refreshed
+  if (!username) {
+    const dbUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { username: true },
+    });
+    username = dbUser?.username ?? null;
+  }
 
   if (!username) {
     return { success: false, error: "Please set your username before playing public matches" };
@@ -45,6 +65,9 @@ export async function joinMatchmakingAction(): Promise<
       }
       return { success: false, error: res.error || "Failed to join matchmaking" };
     }
+
+    // Opportunistically check if 4 players are ready in queue right now
+    await processMatchmakingBatch(redis, lookupUsernamesFromDb);
 
     return {
       success: true,
@@ -103,6 +126,9 @@ export async function getMatchmakingStatusAction(): Promise<
   const userId = session.user.id;
 
   try {
+    // Opportunistically process any pending batch if 4 players are waiting
+    await processMatchmakingBatch(redis, lookupUsernamesFromDb);
+
     const status = await getMatchmakingStatus(redis, userId);
     return { success: true, data: status };
   } catch {

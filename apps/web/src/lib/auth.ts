@@ -61,7 +61,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
      * JWT callback: Populates JWT with local database user ID and username.
      */
     async jwt({ token, account, profile }) {
-      if (account?.providerAccountId || !token.sub || !token.userId) {
+      if (token.userId && !token.username) {
+        // Refresh username from PostgreSQL if token doesn't have it yet
+        const dbUser = await prisma.user.findUnique({
+          where: { id: token.userId as string },
+          select: { username: true },
+        });
+        if (dbUser?.username) {
+          token.username = dbUser.username;
+        }
+      } else if (account?.providerAccountId || !token.sub || !token.userId) {
         const email = token.email || profile?.email;
         const googleId = account?.providerAccountId;
 
