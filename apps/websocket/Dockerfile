@@ -38,12 +38,11 @@ COPY --from=deps /app/tsconfig.base.json ./tsconfig.base.json
 COPY packages/ ./packages/
 COPY apps/websocket/ ./apps/websocket/
 
-# Build TypeScript packages and websocket service
+# Build TypeScript packages
 ENV NODE_ENV=production
-RUN bun --cwd packages/shared run build
-RUN bun --cwd packages/game-engine run build
-RUN bun --cwd packages/redis run build
-RUN bun --cwd apps/websocket run build
+RUN cd packages/shared && bun run build
+RUN cd packages/game-engine && bun run build
+RUN cd packages/redis && bun run build
 
 # 4. Production Runner stage
 FROM base AS runner

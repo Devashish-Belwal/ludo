@@ -26,7 +26,7 @@ RUN bun install --frozen-lockfile
 
 # Generate Prisma Client in deps stage where packages/database/node_modules exists
 ENV DATABASE_URL="postgresql://postgres:postgres@localhost:5432/ludo?schema=public"
-RUN bun --cwd packages/database run prisma:generate
+RUN cd packages/database && bun run prisma:generate
 
 # 3. Builder stage
 FROM base AS builder
@@ -48,10 +48,10 @@ COPY --from=deps /app/tsconfig.base.json ./tsconfig.base.json
 # Build shared packages and production Next.js bundle
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN bun --cwd packages/shared run build
-RUN bun --cwd packages/game-engine run build
-RUN bun --cwd packages/redis run build
-RUN bun --cwd apps/web run build
+RUN cd packages/shared && bun run build
+RUN cd packages/game-engine && bun run build
+RUN cd packages/redis && bun run build
+RUN cd apps/web && bun run build
 
 # 4. Production Runner stage
 FROM base AS runner
