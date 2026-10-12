@@ -18,6 +18,9 @@
       "dependsOn": ["^build"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"]
     },
+    "@ludo/database#build": {
+      "outputs": []
+    },
     "dev": {
       "cache": false,
       "persistent": true
