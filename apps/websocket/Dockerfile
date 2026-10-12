@@ -9,14 +9,17 @@ ENV PATH="/app/node_modules/.bin:${PATH}"
 FROM base AS builder
 WORKDIR /app
 
-# Copy repository manifests and source code before install so node_modules are created in place
+# Copy repository manifests and shared packages before install
 COPY package.json bun.lock turbo.json tsconfig.base.json ./
 COPY packages/ ./packages/
-COPY apps/websocket/ ./apps/websocket/
+COPY apps/websocket/package.json ./apps/websocket/package.json
 COPY apps/web/package.json ./apps/web/package.json
 
-# Install dependencies (creates all root and package node_modules in place)
+# Install dependencies (fast and clean in place)
 RUN bun install --frozen-lockfile
+
+# Copy apps/websocket source files after dependencies are installed
+COPY apps/websocket/ ./apps/websocket/
 
 # Build shared packages
 ENV NODE_ENV=production

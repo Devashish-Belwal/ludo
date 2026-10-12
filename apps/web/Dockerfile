@@ -9,14 +9,17 @@ ENV PATH="/app/node_modules/.bin:${PATH}"
 FROM base AS builder
 WORKDIR /app
 
-# Copy repository manifests and source code before install so node_modules are created in place
+# Copy repository manifests and shared packages before install
 COPY package.json bun.lock turbo.json tsconfig.base.json ./
 COPY packages/ ./packages/
-COPY apps/web/ ./apps/web/
+COPY apps/web/package.json ./apps/web/package.json
 COPY apps/websocket/package.json ./apps/websocket/package.json
 
-# Install dependencies (creates all root and package node_modules in place)
+# Install dependencies (fast and clean in place)
 RUN bun install --frozen-lockfile
+
+# Copy apps/web source files after dependencies are installed
+COPY apps/web/ ./apps/web/
 
 # Generate Prisma Client in database package
 ENV DATABASE_URL="postgresql://postgres:postgres@localhost:5432/ludo?schema=public"
@@ -25,6 +28,11 @@ RUN cd packages/database && bun run prisma:generate
 # Build shared packages and production Next.js bundle
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV AUTH_SECRET="build-dummy-auth-secret-for-compilation"
+ENV WS_TOKEN_SECRET="build-dummy-ws-token-secret-for-compilation"
+ENV NEXT_PUBLIC_APP_URL="http://localhost:3000"
+ENV NEXT_PUBLIC_WS_URL="ws://localhost:3001"
+
 RUN cd packages/shared && bun run build
 RUN cd packages/game-engine && bun run build
 RUN cd packages/redis && bun run build
