@@ -89,16 +89,18 @@ jobs:
             # Ensure Docker and Docker Compose are installed on EC2
             if ! command -v docker &> /dev/null; then
               echo "Docker not found on EC2. Installing Docker & Docker Compose..."
-              sudo apt-get update -y
-              sudo apt-get install -y docker.io docker-compose-v2
+              sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
+              sudo DEBIAN_FRONTEND=noninteractive apt-get install -y docker.io docker-compose-v2
               sudo systemctl enable --now docker
               sudo usermod -aG docker "$USER" || true
             fi
 
-            # Ensure .env file exists on EC2
+            # Ensure .env file exists on EC2 and remove any malformed comments containing equal signs
             if [ ! -f .env ]; then
               echo "Notice: .env not found. Creating from .env.production.example..."
               cp .env.production.example .env
+            else
+              sed -i '/^#.*=/d' .env || true
             fi
 
             # Rebuild and restart Docker containers
