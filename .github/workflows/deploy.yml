@@ -83,6 +83,11 @@ jobs:
 
             cd "$APP_DIR"
 
+            # Clean up old Docker build cache and dangling images to guarantee free disk space
+            echo "Reclaiming disk space from previous builds..."
+            sudo docker system prune -af --volumes || true
+            sudo docker builder prune -af || true
+
             # Pull latest changes from main
             echo "Pulling latest code from main..."
             git fetch origin main
