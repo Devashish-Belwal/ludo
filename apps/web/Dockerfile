@@ -14,7 +14,7 @@ COPY apps/web/package.json ./apps/web/package.json
 COPY apps/websocket/package.json ./apps/websocket/package.json
 
 # Install dependencies in place
-RUN bun install --frozen-lockfile
+RUN bun install --frozen-lockfile && rm -rf ~/.bun/install/cache /root/.bun/install/cache
 
 # Copy apps/web source files after dependencies are installed
 COPY apps/web/ ./apps/web/
@@ -34,7 +34,7 @@ ENV NEXT_PUBLIC_WS_URL="ws://localhost:3001"
 RUN cd packages/shared && bun run build
 RUN cd packages/game-engine && bun run build
 RUN cd packages/redis && bun run build
-RUN cd apps/web && node node_modules/next/dist/bin/next build
+RUN cd apps/web && node node_modules/next/dist/bin/next build && rm -rf .next/cache
 
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"

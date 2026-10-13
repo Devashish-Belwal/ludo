@@ -93,10 +93,18 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
-            # Ensure at least 2GB swap space exists to prevent OOM kills on small EC2 instances
-            if ! swapon --show | grep -q '/swapfile'; then
-              echo "Configuring 2GB swap memory on EC2..."
-              sudo fallocate -l 2G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=2048
+            # Resize or configure 1GB swap memory (1GB is ideal on 8GB EBS to prevent both OOM and disk exhaustion)
+            if [ -f /swapfile ] && [ $(stat -c%s /swapfile 2>/dev/null || echo 0) -gt 1200000000 ]; then
+              echo "Resizing swap to 1GB to reclaim disk space..."
+              sudo swapoff /swapfile || true
+              sudo rm -f /swapfile
+              sudo fallocate -l 1G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=1024
+              sudo chmod 600 /swapfile
+              sudo mkswap /swapfile
+              sudo swapon /swapfile
+            elif ! swapon --show | grep -q '/swapfile'; then
+              echo "Configuring 1GB swap memory on EC2..."
+              sudo fallocate -l 1G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=1024
               sudo chmod 600 /swapfile
               sudo mkswap /swapfile || true
               sudo swapon /swapfile || true
@@ -141,7 +149,16 @@ jobs:
             sudo docker compose build web
             sudo docker compose up -d
 
-            # Clean up unused dangling images to preserve disk space
+            # Clean up unused dangling images and build cache to preserve disk space
             sudo docker image prune -f
+            sudo docker builder prune -f || true
+
+            # Automatically obtain Let's Encrypt certificate via webroot if not yet issued
+            if ! [ -f /etc/letsencrypt/live/ludo.dabelwal.online/cert.pem ]; then
+              echo "Requesting official Let's Encrypt SSL certificate..."
+              sudo certbot certonly --webroot -w /var/www/certbot \
+                -d ludo.dabelwal.online --email 433devashish@gmail.com --agree-tos --no-eff-email --keep-until-expiring --non-interactive || true
+              sudo docker compose restart nginx || true
+            fi
 
             echo "==== Deployment Completed Successfully ===="

@@ -11,7 +11,7 @@ COPY apps/websocket/package.json ./apps/websocket/package.json
 COPY apps/web/package.json ./apps/web/package.json
 
 # Install dependencies in place
-RUN bun install --frozen-lockfile
+RUN bun install --frozen-lockfile && rm -rf ~/.bun/install/cache /root/.bun/install/cache
 
 # Copy apps/websocket source files after dependencies are installed
 COPY apps/websocket/ ./apps/websocket/
