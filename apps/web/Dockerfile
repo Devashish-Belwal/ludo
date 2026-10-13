@@ -5,6 +5,9 @@ FROM oven/bun:1.3.13 AS base
 WORKDIR /app
 ENV PATH="/app/node_modules/.bin:${PATH}"
 
+# Copy official Node.js 20 binary for Next.js Turbopack compilation & runtime compatibility
+COPY --from=node:20-slim /usr/local/bin/node /usr/local/bin/node
+
 # 2. Builder stage
 FROM base AS builder
 WORKDIR /app
@@ -36,7 +39,7 @@ ENV NEXT_PUBLIC_WS_URL="ws://localhost:3001"
 RUN cd packages/shared && bun run build
 RUN cd packages/game-engine && bun run build
 RUN cd packages/redis && bun run build
-RUN cd apps/web && bun run build
+RUN cd apps/web && node /app/node_modules/.bin/next build
 
 # 3. Production Runner stage
 FROM base AS runner
@@ -53,5 +56,5 @@ COPY --from=builder /app ./
 WORKDIR /app/apps/web
 EXPOSE 3000
 
-# Start Next.js production server
-CMD ["bun", "run", "start"]
+# Start Next.js production server with Node.js
+CMD ["node", "/app/node_modules/.bin/next", "start"]
