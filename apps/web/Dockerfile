@@ -39,7 +39,7 @@ ENV NEXT_PUBLIC_WS_URL="ws://localhost:3001"
 RUN cd packages/shared && bun run build
 RUN cd packages/game-engine && bun run build
 RUN cd packages/redis && bun run build
-RUN cd apps/web && node /app/node_modules/.bin/next build
+RUN cd apps/web && node node_modules/next/dist/bin/next build
 
 # 3. Production Runner stage
 FROM base AS runner
@@ -57,4 +57,4 @@ WORKDIR /app/apps/web
 EXPOSE 3000
 
 # Start Next.js production server with Node.js
-CMD ["node", "/app/node_modules/.bin/next", "start"]
+CMD ["node", "node_modules/next/dist/bin/next", "start"]
