@@ -128,8 +128,9 @@ export function GameRoom({ gameId, currentUserId, onLeave }: GameRoomProps) {
         const { ticket } = await ticketRes.json();
         if (!ticket || !isMounted) return;
 
-        const wsHost = window.location.hostname;
-        const wsBaseUrl = process.env.NEXT_PUBLIC_WS_URL || `ws://${wsHost}:3001`;
+        const isSecure = window.location.protocol === "https:";
+        const defaultWsUrl = `${isSecure ? "wss:" : "ws:"}//${window.location.host}/ws`;
+        const wsBaseUrl = process.env.NEXT_PUBLIC_WS_URL || defaultWsUrl;
         const socket = new WebSocket(`${wsBaseUrl}?ticket=${ticket}&deviceId=web-client`);
 
         socket.onopen = () => {

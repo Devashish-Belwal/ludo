@@ -122,6 +122,17 @@ jobs:
               sed -i '/^#.*=/d' .env || true
             fi
 
+            # Ensure SSL certificate directory and placeholder exist so Nginx starts smoothly
+            sudo mkdir -p /var/www/certbot
+            if [ ! -f /etc/letsencrypt/live/ludo.dabelwal.online/fullchain.pem ]; then
+              echo "Generating initial certificate for Nginx startup..."
+              sudo mkdir -p /etc/letsencrypt/live/ludo.dabelwal.online
+              sudo openssl req -x509 -nodes -newkey rsa:2048 -days 1 \
+                -keyout /etc/letsencrypt/live/ludo.dabelwal.online/privkey.pem \
+                -out /etc/letsencrypt/live/ludo.dabelwal.online/fullchain.pem \
+                -subj '/CN=ludo.dabelwal.online' || true
+            fi
+
             # Rebuild and restart Docker containers sequentially to avoid CPU/RAM starvation on small instances
             echo "Rebuilding and restarting Docker containers..."
             sudo docker compose down --remove-orphans || true
