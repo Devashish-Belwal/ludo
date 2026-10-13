@@ -12,6 +12,9 @@ services:
       - PORT=3000
       - NODE_ENV=production
       - AUTH_TRUST_HOST=true
+      - AUTH_URL=https://ludo.dabelwal.online
+      - NEXTAUTH_URL=https://ludo.dabelwal.online
+      - NEXT_PUBLIC_APP_URL=https://ludo.dabelwal.online
     expose:
       - "3000"
     networks:
