@@ -126,6 +126,7 @@ jobs:
             echo "Rebuilding and restarting Docker containers..."
             sudo docker compose down --remove-orphans || true
             sudo docker compose build websocket
+            sudo docker builder prune -f || true
             sudo docker compose build web
             sudo docker compose up -d
 

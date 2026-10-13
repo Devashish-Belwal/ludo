@@ -1,6 +1,5 @@
-# Multi-stage Dockerfile for Next.js Web App in Bun Monorepo
+# Single-stage Dockerfile for Next.js Web App in Bun Monorepo (Prevents redundant layer duplication on small disks)
 
-# 1. Base stage
 FROM oven/bun:1.3.13 AS base
 WORKDIR /app
 ENV PATH="/app/node_modules/.bin:${PATH}"
@@ -8,17 +7,13 @@ ENV PATH="/app/node_modules/.bin:${PATH}"
 # Copy official Node.js 20 binary for Next.js Turbopack compilation & runtime compatibility
 COPY --from=node:20-slim /usr/local/bin/node /usr/local/bin/node
 
-# 2. Builder stage
-FROM base AS builder
-WORKDIR /app
-
 # Copy repository manifests and shared packages before install
 COPY package.json bun.lock turbo.json tsconfig.base.json ./
 COPY packages/ ./packages/
 COPY apps/web/package.json ./apps/web/package.json
 COPY apps/websocket/package.json ./apps/websocket/package.json
 
-# Install dependencies (fast and clean in place)
+# Install dependencies in place
 RUN bun install --frozen-lockfile
 
 # Copy apps/web source files after dependencies are installed
@@ -41,17 +36,8 @@ RUN cd packages/game-engine && bun run build
 RUN cd packages/redis && bun run build
 RUN cd apps/web && node node_modules/next/dist/bin/next build
 
-# 3. Production Runner stage
-FROM base AS runner
-WORKDIR /app
-
-ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
-ENV NEXT_TELEMETRY_DISABLED=1
-
-# Copy built workspace and node_modules
-COPY --from=builder /app ./
 
 WORKDIR /app/apps/web
 EXPOSE 3000
