@@ -132,6 +132,10 @@ jobs:
 
             # Ensure SSL certificate directory and placeholder exist so Nginx starts smoothly
             sudo mkdir -p /var/www/certbot
+            if [ -f /etc/letsencrypt/live/ludo.dabelwal.online-0001/fullchain.pem ] && [ ! -f /etc/letsencrypt/live/ludo.dabelwal.online/fullchain.pem ]; then
+              echo "Linking Let's Encrypt certificate from -0001 profile..."
+              sudo ln -sfn /etc/letsencrypt/live/ludo.dabelwal.online-0001 /etc/letsencrypt/live/ludo.dabelwal.online
+            fi
             if [ ! -f /etc/letsencrypt/live/ludo.dabelwal.online/fullchain.pem ]; then
               echo "Generating initial certificate for Nginx startup..."
               sudo mkdir -p /etc/letsencrypt/live/ludo.dabelwal.online
