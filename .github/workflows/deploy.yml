@@ -68,6 +68,8 @@ jobs:
           username: ${{ secrets.EC2_USER || 'ubuntu' }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: ${{ secrets.EC2_PORT || 22 }}
+          command_timeout: 30m
+          timeout: 30m
           script: |
             set -e
             echo "==== Starting EC2 Deployment ===="
@@ -115,10 +117,12 @@ jobs:
               sed -i '/^#.*=/d' .env || true
             fi
 
-            # Rebuild and restart Docker containers
+            # Rebuild and restart Docker containers sequentially to avoid CPU/RAM starvation on small instances
             echo "Rebuilding and restarting Docker containers..."
             sudo docker compose down --remove-orphans || true
-            sudo docker compose up -d --build
+            sudo docker compose build websocket
+            sudo docker compose build web
+            sudo docker compose up -d
 
             # Clean up unused dangling images to preserve disk space
             sudo docker image prune -f
